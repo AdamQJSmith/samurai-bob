@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samurai Bob 3D - Arena Battle</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Luckiest+Guy&family=Nunito:wght@700;800;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Title Screen -->
+    <div id="title-screen" class="screen">
+        <div class="title-content">
+            <h1 class="game-title">
+                <span class="title-top">
+                    <span class="m-letter m1">S</span>
+                    <span class="m-letter m2">A</span>
+                    <span class="m-letter m3">M</span>
+                    <span class="m-letter m4">U</span>
+                    <span class="m-letter m5">R</span>
+                    <span class="m-letter m6">A</span>
+                    <span class="m-letter m7">I</span>
+                </span>
+                <span class="title-bottom">
+                    <span class="wood-board">
+                        <span class="leaf-accent left"></span>
+                        <span class="wood-text">BOB</span>
+                        <span class="leaf-accent right"></span>
+                    </span>
+                </span>
+            </h1>
+            <p class="subtitle">⚔️ Choose Your Mode ⚔️</p>
+            <div class="menu-buttons">
+                <button id="battle-royale-button" class="menu-button disabled" data-ready="false" onclick="window.requestSamuraiStartGame && window.requestSamuraiStartGame();">🎯 BATTLE ROYALE</button>
+                <button id="campaign-button" class="menu-button disabled">📖 CAMPAIGN<br><span class="coming-soon">(Coming Soon)</span></button>
+                <button id="settings-button" class="menu-button">⚙️ SETTINGS</button>
+            </div>
+            <div class="controls-info">
+                <h3>Battle Royale Controls:</h3>
+                <p><strong>WASD</strong> - Move | <strong>SPACE</strong> - Jump</p>
+                <p><strong>LEFT CLICK</strong> - Sword | <strong>RIGHT CLICK</strong> - Shield</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Screen -->
+    <div id="settings-screen" class="screen hidden">
+        <div class="settings-content">
+            <h1>⚙️ SETTINGS ⚙️</h1>
+            <div class="settings-section">
+                <h2>Controls</h2>
+                <p>Movement: <strong>WASD</strong></p>
+                <p>Jump: <strong>SPACE</strong></p>
+                <p>Attack: <strong>LEFT CLICK</strong></p>
+                <p>Block: <strong>RIGHT CLICK</strong></p>
+            </div>
+            <button id="back-to-menu" class="menu-button">⬅️ BACK TO MENU</button>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen hidden">
+        <!-- HUD -->
+        <div id="hud">
+            <div class="hud-top-left">
+                <div id="health-bar">
+                    <div class="bar-bg">
+                        <div id="health-fill" class="bar-fill health"></div>
+                    </div>
+                    <span id="health-text">HP: 100/100</span>
+                </div>
+            </div>
+            <div class="hud-top-right">
+                <div id="timer">Time: 00:00</div>
+                <div id="kills">Kills: 0</div>
+                <div id="score">Score: 0</div>
+            </div>
+            <div class="hud-bottom">
+                <div id="speed-mult">⚡ Speed: x1.0</div>
+                <div id="power-mult">💪 Power: x1.0</div>
+            </div>
+        </div>
+
+        <!-- Crosshair -->
+        <div id="crosshair"></div>
+
+        <!-- 3D Canvas -->
+        <div id="canvas-container"></div>
+    </div>
+
+    <!-- Game Over Screen -->
+    <div id="gameover-screen" class="screen hidden">
+        <div class="gameover-content">
+            <h1>⚔️ BATTLE COMPLETE ⚔️</h1>
+            <div id="final-stats">
+                <h2>Final Stats:</h2>
+                <p id="final-time">Time Survived: 00:00</p>
+                <p id="final-score">Final Score: 0</p>
+                <p id="final-kills">Total Kills: 0</p>
+                <p id="final-speed">Max Speed: x1.0</p>
+                <p id="final-power">Max Power: x1.0</p>
+            </div>
+            <button id="restart-button" class="game-button">PLAY AGAIN</button>
+        </div>
+    </div>
+
+    <!-- Local Three.js Library (0.150.0) -->
+    <script src="vendor/three.min.js"></script>
+    <script>
+        (function() {
+            const logContainer = document.createElement('div');
+            logContainer.id = 'samurai-debug-log';
+            logContainer.style.position = 'fixed';
+            logContainer.style.bottom = '20px';
+            logContainer.style.left = '20px';
+            logContainer.style.maxWidth = '320px';
+            logContainer.style.maxHeight = '240px';
+            logContainer.style.overflow = 'auto';
+            logContainer.style.padding = '12px';
+            logContainer.style.background = 'rgba(0, 0, 0, 0.75)';
+            logContainer.style.color = '#fff';
+            logContainer.style.fontFamily = 'monospace';
+            logContainer.style.fontSize = '12px';
+            logContainer.style.borderRadius = '8px';
+            logContainer.style.zIndex = '9999';
+            logContainer.style.pointerEvents = 'none';
+            logContainer.style.display = 'none';
+            document.body.appendChild(logContainer);
+
+            window.__samuraiLog = function(message, isError) {
+                logContainer.style.display = 'block';
+                const time = new Date().toLocaleTimeString();
+                const entry = document.createElement('div');
+                entry.style.marginBottom = '4px';
+                entry.textContent = `[${time}] ${message}`;
+                if (isError) {
+                    entry.style.color = '#ff6b6b';
+                }
+                logContainer.appendChild(entry);
+                logContainer.scrollTop = logContainer.scrollHeight;
+                console[isError ? 'error' : 'log']('SamuraiBob:', message);
+            };
+
+            window.addEventListener('error', function(event) {
+                if (window.__samuraiLog) {
+                    window.__samuraiLog(`Global error: ${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`, true);
+                }
+                if (window.__samuraiUpdateBattleButton) {
+                    window.__samuraiUpdateBattleButton(false, 'Error');
+                }
+            });
+
+            window.addEventListener('unhandledrejection', function(event) {
+                if (window.__samuraiLog) {
+                    window.__samuraiLog(`Unhandled promise rejection: ${event.reason}`, true);
+                }
+                if (window.__samuraiUpdateBattleButton) {
+                    window.__samuraiUpdateBattleButton(false, 'Error');
+                }
+            });
+        })();
+
+        // Queue system for startGame to handle early clicks
+        (function() {
+            const MAX_RETRIES = 200; // 20 seconds
+            window.__samuraiStartQueue = {
+                queued: 0,
+                watching: false,
+                retries: 0,
+                watcher: null
+            };
+
+            function tryStartGame() {
+                if (typeof window.startGame === 'function') {
+                    console.log('startGame ready! Executing queued requests:', window.__samuraiStartQueue.queued + 1);
+                    const times = window.__samuraiStartQueue.queued + 1;
+                    window.__samuraiStartQueue.queued = 0;
+                    updateBattleButton(true);
+                    for (let i = 0; i < times; i++) {
+                        try {
+                            window.startGame();
+                        } catch (err) {
+                            console.error('Error running startGame:', err);
+                            alert('Error starting the game. Check console for details.');
+                            break;
+                        }
+                    }
+                } else {
+                    window.__samuraiStartQueue.queued++;
+                    watchForStartGame();
+                }
+            }
+
+            function watchForStartGame() {
+                if (window.__samuraiStartQueue.watching) return;
+                window.__samuraiStartQueue.watching = true;
+                window.__samuraiStartQueue.retries = 0;
+                updateBattleButton(false, 'Loading...');
+
+                window.__samuraiStartQueue.watcher = setInterval(() => {
+                    window.__samuraiStartQueue.retries++;
+                    const type = typeof window.startGame;
+                    console.log('Waiting for startGame... attempt', window.__samuraiStartQueue.retries, 'type:', type);
+                    if (type === 'function') {
+                        clearInterval(window.__samuraiStartQueue.watcher);
+                        window.__samuraiStartQueue.watching = false;
+                        const queued = window.__samuraiStartQueue.queued;
+                        window.__samuraiStartQueue.queued = 0;
+                        updateBattleButton(true);
+                        console.log('startGame found! Running queued calls:', queued);
+                        for (let i = 0; i < queued; i++) {
+                            window.startGame();
+                        }
+                    } else if (window.__samuraiStartQueue.retries >= MAX_RETRIES) {
+                        clearInterval(window.__samuraiStartQueue.watcher);
+                        window.__samuraiStartQueue.watching = false;
+                        updateBattleButton(false, 'Error - Refresh');
+                        alert('Game failed to load within 20 seconds. Please refresh the page.');
+                    }
+                }, 100);
+            }
+
+            function updateBattleButton(ready, text) {
+                const btn = document.getElementById('battle-royale-button');
+                if (!btn) return;
+                if (ready) {
+                    btn.classList.remove('disabled');
+                    btn.dataset.ready = 'true';
+                    btn.textContent = '🎯 BATTLE ROYALE';
+                } else {
+                    btn.classList.add('disabled');
+                    btn.dataset.ready = 'false';
+                    if (text) {
+                        btn.textContent = `⏳ ${text}`;
+                    }
+                }
+            }
+
+            window.requestSamuraiStartGame = function() {
+                console.log('requestSamuraiStartGame invoked. startGame type:', typeof window.startGame);
+                if (typeof window.startGame === 'function') {
+                    updateBattleButton(true);
+                    window.startGame();
+                } else {
+                    updateBattleButton(false, 'Loading...');
+                    tryStartGame();
+                }
+            };
+
+            // Expose helpers for debugging
+            window.__samuraiUpdateBattleButton = updateBattleButton;
+        })();
+
+        // Wait for Three.js to load before running game code
+        function waitForThree(callback) {
+            if (typeof THREE !== 'undefined') {
+                console.log('THREE is ready!');
+                callback();
+            } else {
+                console.log('Waiting for THREE.js...');
+                setTimeout(() => waitForThree(callback), 50);
+            }
+        }
+        
+        waitForThree(function() {
+            // Load game.js after Three.js is ready
+            console.log('Loading game.js...');
+            const script = document.createElement('script');
+            script.src = 'game.js';
+            script.onload = function() {
+                console.log('game.js loaded successfully!');
+                // Wait a moment for functions to be defined
+                setTimeout(() => {
+                    console.log('Checking if startGame is ready:', typeof window.startGame);
+                    if (typeof window.startGame === 'function') {
+                        console.log('✅ Game is ready!');
+                    } else {
+                        console.warn('⚠️ startGame not found after script load');
+                    }
+                }, 100);
+            };
+            script.onerror = function() {
+                console.error('❌ Failed to load game.js!');
+                alert('Error: Failed to load game script. Please refresh the page.');
+            };
+            document.body.appendChild(script);
+        });
+    </script>
+</body>
+</html>
+

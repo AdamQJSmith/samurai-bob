@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Samurai Bob - Arena Battle</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="game-container">
+        <!-- Title Screen -->
+        <div id="title-screen" class="screen">
+            <div class="title-content">
+                <h1 class="game-title">⚔️ SAMURAI BOB ⚔️</h1>
+                <p class="subtitle">Defend the Arena!</p>
+                <div class="menu-buttons">
+                    <button id="start-button" class="menu-button">▶ START GAME</button>
+                    <button id="settings-button" class="menu-button">⚙️ SETTINGS</button>
+                    <button id="how-to-play-button" class="menu-button">❓ HOW TO PLAY</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Settings Screen -->
+        <div id="settings-screen" class="screen hidden">
+            <div class="settings-content">
+                <h1>⚙️ SETTINGS ⚙️</h1>
+                
+                <div class="settings-section">
+                    <h2>🔊 Audio</h2>
+                    <div class="setting-item">
+                        <label for="master-volume">Master Volume:</label>
+                        <input type="range" id="master-volume" min="0" max="100" value="30">
+                        <span id="volume-value">30%</span>
+                    </div>
+                    <div class="setting-item">
+                        <label for="sound-toggle">Sound Effects:</label>
+                        <button id="sound-toggle" class="toggle-button">ON</button>
+                    </div>
+                </div>
+
+                <div class="settings-section">
+                    <h2>🎮 Controls</h2>
+                    <div class="controls-display">
+                        <div class="control-row">
+                            <span class="control-label">Move:</span>
+                            <span class="control-keys">⬆️ ⬇️ ⬅️ ➡️ Arrow Keys</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">Jump:</span>
+                            <span class="control-keys">Space</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">Sword Attack:</span>
+                            <span class="control-keys">B</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">Shield:</span>
+                            <span class="control-keys">Z (Hold)</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">Shield Bash:</span>
+                            <span class="control-keys">Z + Move Forward</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">Shield Backflip:</span>
+                            <span class="control-keys">Z + Space</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">Wind Blast:</span>
+                            <span class="control-keys">W (with Wind power)</span>
+                        </div>
+                        <div class="control-row">
+                            <span class="control-label">Fire Breath:</span>
+                            <span class="control-keys">F (with Dragon power)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="back-to-menu" class="menu-button">⬅️ BACK TO MENU</button>
+            </div>
+        </div>
+
+        <!-- How to Play Screen -->
+        <div id="howtoplay-screen" class="screen hidden">
+            <div class="howtoplay-content">
+                <h1>❓ HOW TO PLAY ❓</h1>
+                
+                <div class="info-section">
+                    <h2>🎯 Objective</h2>
+                    <p>Survive as long as possible against endless waves of enemies!</p>
+                </div>
+
+                <div class="info-section">
+                    <h2>⚔️ Combat</h2>
+                    <p>• Use your sword (B) for melee attacks</p>
+                    <p>• Hold shield (Z) to block incoming damage</p>
+                    <p>• Combine moves for powerful attacks!</p>
+                </div>
+
+                <div class="info-section">
+                    <h2>✨ Power-Ups</h2>
+                    <p>🍃 <strong>Leaf:</strong> Invincibility mode</p>
+                    <p>🐲 <strong>Dragon:</strong> Fire breath + kill on touch</p>
+                    <p>💨 <strong>Wind:</strong> Blow enemies back</p>
+                </div>
+
+                <div class="info-section">
+                    <h2>📈 Progression</h2>
+                    <p>• Each kill increases Speed (up to 5x)</p>
+                    <p>• Each kill increases Power (up to 20x)</p>
+                    <p>• Enemies get stronger over time!</p>
+                </div>
+
+                <button id="back-to-menu-2" class="menu-button">⬅️ BACK TO MENU</button>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen hidden">
+            <!-- HUD -->
+            <div id="hud">
+                <div class="hud-left">
+                    <div id="timer">Time: 00:00</div>
+                    <div id="score">Score: 0</div>
+                    <div id="health">❤️ Health: 100</div>
+                </div>
+                <div class="hud-right">
+                    <div id="speed-mult">⚡ Speed: x1.0</div>
+                    <div id="power-mult">💪 Power: x1.0</div>
+                    <div id="kills">🗡️ Kills: 0</div>
+                </div>
+            </div>
+
+            <!-- Canvas -->
+            <canvas id="game-canvas"></canvas>
+
+            <!-- Power-up indicator -->
+            <div id="powerup-indicator" class="hidden"></div>
+            
+            <!-- Start game controls message -->
+            <div id="start-controls-message" class="controls-message hidden">
+                <p>⚔️ Press <strong>A</strong> or <strong>Space</strong> to Slash ⚔️</p>
+                <p>🛡️ Press <strong>D</strong> to Block 🛡️</p>
+            </div>
+        </div>
+
+        <!-- Game Over Screen -->
+        <div id="gameover-screen" class="screen hidden">
+            <div id="scroll-up-prompt" class="scroll-prompt hidden">⬆️ Scroll Up ⬆️</div>
+            <div class="gameover-content">
+                <h1>⚔️ BATTLE COMPLETE ⚔️</h1>
+                <div id="new-high-score" class="hidden new-record">🏆 NEW HIGH SCORE! 🏆</div>
+                <div id="final-stats">
+                    <h2>Final Stats:</h2>
+                    <p id="final-time">Time Survived: 00:00</p>
+                    <p id="final-score">Final Score: 0</p>
+                    <p id="final-kills">Total Kills: 0</p>
+                    <p id="final-speed">Max Speed: x1.0</p>
+                    <p id="final-power">Max Power: x1.0</p>
+                </div>
+                <div id="high-scores">
+                    <h2>🏆 High Scores 🏆</h2>
+                    <ol id="high-score-list"></ol>
+                </div>
+                <button id="restart-button" class="game-button">PLAY AGAIN</button>
+            </div>
+            <div id="scroll-down-prompt" class="scroll-prompt hidden">⬇️ Scroll Down ⬇️</div>
+        </div>
+    </div>
+
+    <script src="sounds.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
+
