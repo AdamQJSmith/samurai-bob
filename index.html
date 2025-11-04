@@ -53,8 +53,25 @@
                 <h2>Controls</h2>
                 <p>Movement: <strong>WASD</strong></p>
                 <p>Jump: <strong>SPACE</strong></p>
-                <p>Attack: <strong>LEFT CLICK</strong></p>
-                <p>Block: <strong>RIGHT CLICK</strong></p>
+                <p>Attack: <strong>LEFT CLICK or J</strong></p>
+                <p>Block: <strong>RIGHT CLICK or SHIFT</strong></p>
+                <p>Camera: <strong>HOLD BOTH MOUSE BUTTONS + MOVE</strong></p>
+                <p>Zoom: <strong>SCROLL WHEEL</strong></p>
+            </div>
+            <div class="settings-section">
+                <h2>Abilities (Test Keys)</h2>
+                <p>Leaf Form: <strong>1</strong></p>
+                <p>Dragon Form: <strong>2</strong></p>
+                <p>Wind Orb: <strong>3</strong></p>
+                <p>Fire Breath (Dragon): <strong>K</strong></p>
+                <p>Wind Gust (Wind): <strong>Q</strong></p>
+            </div>
+            <div class="settings-section">
+                <h2>Camera</h2>
+                <label style="cursor: pointer; display: flex; align-items: center; gap: 10px;">
+                    <input type="checkbox" id="lock-camera" style="width: 20px; height: 20px;">
+                    <span>Lock Camera (Disable Rotation & Zoom)</span>
+                </label>
             </div>
             <button id="back-to-menu" class="menu-button">⬅️ BACK TO MENU</button>
         </div>
@@ -80,6 +97,23 @@
             <div class="hud-bottom">
                 <div id="speed-mult">⚡ Speed: x1.0</div>
                 <div id="power-mult">💪 Power: x1.0</div>
+            </div>
+            <div class="hud-abilities">
+                <div id="ability-leaf" class="ability-icon">
+                    <div class="ability-key">1</div>
+                    <div class="ability-name">Leaf</div>
+                    <div class="ability-time"></div>
+                </div>
+                <div id="ability-dragon" class="ability-icon">
+                    <div class="ability-key">2</div>
+                    <div class="ability-name">Dragon</div>
+                    <div class="ability-time"></div>
+                </div>
+                <div id="ability-wind" class="ability-icon">
+                    <div class="ability-key">3</div>
+                    <div class="ability-name">Wind</div>
+                    <div class="ability-time"></div>
+                </div>
             </div>
         </div>
 
@@ -268,6 +302,7 @@
             // Load game.js after Three.js is ready
             console.log('Loading game.js...');
             const script = document.createElement('script');
+            script.type = 'module';
             script.src = 'game.js';
             script.onload = function() {
                 console.log('game.js loaded successfully!');

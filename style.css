@@ -278,6 +278,53 @@ body {
     border-radius: 5px;
 }
 
+/* Ability HUD */
+.hud-abilities {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    display: flex;
+    gap: 10px;
+}
+
+.ability-icon {
+    background: rgba(0,0,0,0.6);
+    border: 2px solid rgba(255,255,255,0.3);
+    border-radius: 8px;
+    padding: 8px;
+    width: 70px;
+    text-align: center;
+    font-size: 0.9rem;
+}
+
+.ability-icon.active {
+    border-color: #4facfe;
+    background: rgba(79,172,254,0.3);
+    box-shadow: 0 0 15px rgba(79,172,254,0.5);
+}
+
+.ability-icon.cooldown {
+    opacity: 0.5;
+    border-color: rgba(255,0,0,0.5);
+}
+
+.ability-key {
+    font-weight: bold;
+    color: #ffeb3b;
+    margin-bottom: 4px;
+}
+
+.ability-name {
+    font-size: 0.85rem;
+    margin-bottom: 4px;
+}
+
+.ability-time {
+    font-size: 0.75rem;
+    color: #aaa;
+    min-height: 14px;
+}
+
 /* Health Bar */
 #health-bar {
     background: rgba(0,0,0,0.5);

@@ -1,22 +1,25 @@
-// Import new modules
-import { WoWCameraRig } from './src/camera/WoWCameraRig.js';
-import { Controls } from './src/input/Controls.js';
-import { PlayerController } from './src/player/PlayerController.js';
-import { AbilityManager } from './src/player/Abilities.js';
-import { processSwordSlash, processShieldBash, applyHit } from './src/combat/Attacks.js';
-
 // ===== GAME STATE =====
 let gameState = 'title';
 let scene, camera, renderer;
-let player, playerController, abilityManager, cameraRig, controls;
-let enemies = [], particles = [];
-let clock, accumulator = 0;
-const FIXED_DT = 1 / 60;
+let player, enemies = [], particles = [];
+let clock, deltaTime;
+let keys = {}, mouseDown = {};
 
 // Player stats
 let playerStats = {
+    health: 100,
+    maxHealth: 100,
+    speed: 8,
+    jumpPower: 12,
     kills: 0,
-    score: 0
+    score: 0,
+    speedMult: 1.0,
+    powerMult: 1.0,
+    isJumping: false,
+    velocity: new THREE.Vector3(),
+    isAttacking: false,
+    attackCooldown: 0,
+    isBlocking: false
 };
 
 let gameTimer = 0;
@@ -154,12 +157,14 @@ function createShieldTexture() {
     canvas.height = size;
     const ctx = canvas.getContext('2d');
 
+    // wood background
     const wood = ctx.createLinearGradient(0, 0, size, size);
     wood.addColorStop(0, '#ab6a2a');
     wood.addColorStop(1, '#8d4f1d');
     ctx.fillStyle = wood;
     ctx.fillRect(0, 0, size, size);
 
+    // rings
     ctx.strokeStyle = '#d8cbb3';
     ctx.lineWidth = 34;
     ctx.beginPath();
@@ -172,6 +177,7 @@ function createShieldTexture() {
     ctx.arc(size / 2, size / 2, size / 2 - 70, 0, Math.PI * 2);
     ctx.stroke();
 
+    // petals
     ctx.fillStyle = '#f7f5ef';
     ctx.beginPath();
     for (let i = 0; i < 5; i++) {
@@ -255,7 +261,11 @@ function createWaterTexture() {
     return TEXTURES.water;
 }
 
-// Create CapsuleGeometry fallback
+// ===== CHECK THREE.JS IS LOADED =====
+// This check will be done when init() is called, not here
+
+// ===== CAPSULE GEOMETRY FALLBACK =====
+// Create CapsuleGeometry if it doesn't exist (for older Three.js versions)
 if (typeof THREE !== 'undefined' && !THREE.CapsuleGeometry) {
     THREE.CapsuleGeometry = class extends THREE.BufferGeometry {
         constructor(radius = 1, length = 1, capSubdivisions = 4, radialSegments = 8) {
@@ -264,6 +274,7 @@ if (typeof THREE !== 'undefined' && !THREE.CapsuleGeometry) {
             const vertices = [];
             const indices = [];
             
+            // Create a cylinder-like shape (approximation of capsule)
             const height = length;
             const radiusTop = radius;
             const radiusBottom = radius;
@@ -287,6 +298,7 @@ if (typeof THREE !== 'undefined' && !THREE.CapsuleGeometry) {
                 }
             }
             
+            // Create indices
             for (let y = 0; y < capSubdivisions; y++) {
                 for (let x = 0; x < radialSegments; x++) {
                     const a = y * (radialSegments + 1) + x;
@@ -313,12 +325,13 @@ function init() {
         window.__samuraiLog('init() called - initializing game...');
     }
     
+    // Check if THREE.js is loaded
     if (typeof THREE === 'undefined') {
         console.error('THREE.js is not loaded! Waiting...');
         if (window.__samuraiLog) {
             window.__samuraiLog('THREE.js not loaded yet, retrying...', true);
         }
-        setTimeout(init, 100);
+        setTimeout(init, 100); // Retry in 100ms
         return;
     }
     
@@ -328,6 +341,7 @@ function init() {
     }
     
     try {
+        // Setup Three.js
         scene = new THREE.Scene();
         scene.background = new THREE.Color(0x78b8ff);
         scene.fog = new THREE.Fog(0x9dd3ff, 80, 220);
@@ -378,23 +392,57 @@ function init() {
     // Create arena
     createArena();
 
-    // UI buttons
+    // Event listeners
+    document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+    document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
+    document.addEventListener('mousedown', (e) => {
+        mouseDown[e.button] = true;
+        if (gameState === 'playing') {
+            if (e.button === 0) playerAttack(); // Left click
+            if (e.button === 2) playerStats.isBlocking = true; // Right click
+        }
+        e.preventDefault();
+    });
+    document.addEventListener('mouseup', (e) => {
+        mouseDown[e.button] = false;
+        if (e.button === 2) playerStats.isBlocking = false;
+        e.preventDefault();
+    });
+    document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+    // UI buttons - with error handling
     const battleRoyaleBtn = document.getElementById('battle-royale-button');
     const restartBtn = document.getElementById('restart-button');
+    
+    console.log('Looking for button, found:', battleRoyaleBtn);
     
     if (battleRoyaleBtn) {
         battleRoyaleBtn.addEventListener('click', (e) => {
             e.preventDefault();
             e.stopPropagation();
-            if (typeof startGame === 'function') {
-                startGame();
+            console.log('Battle Royale button clicked! (from event listener)');
+            try {
+                if (typeof startGame === 'function') {
+                    startGame();
+                } else {
+                    console.error('startGame is not a function!', typeof startGame);
+                    alert('Error: startGame function not found');
+                }
+            } catch (error) {
+                console.error('Error starting game:', error);
+                alert('Error starting game: ' + error.message);
             }
         });
+        console.log('Event listener attached to Battle Royale button');
+    } else {
+        console.error('Battle Royale button not found in DOM!');
     }
     
     if (restartBtn) {
         restartBtn.addEventListener('click', startGame);
     }
+    
+    console.log('All button event listeners attached. init() complete.');
     
     // Settings button
     document.getElementById('settings-button').addEventListener('click', () => {
@@ -408,26 +456,26 @@ function init() {
         document.getElementById('title-screen').classList.remove('hidden');
     });
     
-    // Camera lock setting
-    const lockCameraCheckbox = document.getElementById('lock-camera');
-    const saved = localStorage.getItem('lockCamera') === 'true';
-    lockCameraCheckbox.checked = saved;
-    lockCameraCheckbox.addEventListener('change', (e) => {
-        localStorage.setItem('lockCamera', e.target.checked ? 'true' : 'false');
-        if (cameraRig) {
-            cameraRig.setLocked(e.target.checked);
-        }
-        if (e.target.checked) {
-            document.exitPointerLock?.();
-        }
-    });
-    
     // Campaign button (disabled)
     document.getElementById('campaign-button').addEventListener('click', (e) => {
         e.preventDefault();
+        // Do nothing, it's coming soon!
     });
 
+    // Handle window resize
     window.addEventListener('resize', onWindowResize);
+
+    // Mouse movement for camera
+    document.addEventListener('mousemove', onMouseMove);
+}
+
+let mouseX = 0, mouseY = 0;
+let targetCameraRotation = 0;
+
+function onMouseMove(event) {
+    if (gameState !== 'playing') return;
+    mouseX = (event.clientX / window.innerWidth) * 2 - 1;
+    mouseY = -(event.clientY / window.innerHeight) * 2 + 1;
 }
 
 function onWindowResize() {
@@ -443,6 +491,7 @@ function createArena() {
     const arenaGroup = new THREE.Group();
     arenaGroup.name = 'arenaGroup';
 
+    // Floating diorama base
     const sideGeometry = new THREE.CylinderGeometry(ARENA_RADIUS, ARENA_RADIUS * 1.06, ARENA_HEIGHT, 64, 1, true);
     const sideMaterial = new THREE.MeshStandardMaterial({
         map: TEXTURES.grassSide,
@@ -473,6 +522,7 @@ function createArena() {
     bottomMesh.position.y = -ARENA_HEIGHT;
     arenaGroup.add(bottomMesh);
 
+    // Soft moss fringe
     const fringeGeometry = new THREE.TorusGeometry(ARENA_RADIUS - 0.4, 0.3, 16, 64);
     const fringeMaterial = new THREE.MeshStandardMaterial({ color: 0x3ba94f, roughness: 0.8, metalness: 0 });
     const fringe = new THREE.Mesh(fringeGeometry, fringeMaterial);
@@ -484,6 +534,7 @@ function createArena() {
     arenaGroup.position.y = 0;
     scene.add(arenaGroup);
 
+    // Water ring beneath platform
     const waterTexture = createWaterTexture();
     const waterGeometry = new THREE.CircleGeometry(60, 64);
     const waterMaterial = new THREE.MeshStandardMaterial({
@@ -499,6 +550,7 @@ function createArena() {
     water.receiveShadow = false;
     scene.add(water);
 
+    // Background hills and trees
     addBackgroundElements();
 }
 
@@ -525,6 +577,7 @@ function addBackgroundElements() {
         backgroundGroup.add(hill);
     }
 
+    // Stylized trees
     const treeGroup = new THREE.Group();
     const treePositions = [
         { x: 12, z: 8 },
@@ -548,6 +601,7 @@ function addBackgroundElements() {
     });
     backgroundGroup.add(treeGroup);
 
+    // Soft clouds
     for (let i = 0; i < 12; i++) {
         const puff = new THREE.Mesh(
             new THREE.SphereGeometry(2 + Math.random() * 1.5, 16, 16),
@@ -565,7 +619,7 @@ function addBackgroundElements() {
     scene.add(backgroundGroup);
 }
 
-// ===== CREATE PLAYER =====
+// ===== CREATE SAMURAI BOB (Cute rounded chibi character like the reference!) =====
 function createPlayer() {
     const playerGroup = new THREE.Group();
     playerGroup.name = 'samuraiBob';
@@ -703,7 +757,7 @@ function createPlayer() {
     return playerGroup;
 }
 
-// ===== CREATE ENEMY =====
+// ===== CREATE ENEMY (Low-poly 3D) =====
 function createEnemy(type = 'grunt') {
     const enemyGroup = new THREE.Group();
 
@@ -744,6 +798,7 @@ function createEnemy(type = 'grunt') {
             break;
     }
 
+    // Body
     const bodyGeometry = new THREE.SphereGeometry(size, 32, 32);
     const bodyMaterial = getToonMaterial(color);
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
@@ -751,6 +806,7 @@ function createEnemy(type = 'grunt') {
     body.castShadow = true;
     enemyGroup.add(body);
 
+    // Horns (if boss or grunt)
     if (type === 'grunt' || type === 'boss') {
         const hornGeometry = new THREE.ConeGeometry(0.3, 1, 6);
         const hornMaterial = getToonMaterial(0x1a1a1a);
@@ -763,6 +819,7 @@ function createEnemy(type = 'grunt') {
         enemyGroup.add(rightHorn);
     }
 
+    // Eyes (glowing red)
     const eyeGeometry = new THREE.SphereGeometry(0.18, 16, 16);
     const eyeMaterial = new THREE.MeshBasicMaterial({ color: 0xff5252 });
     const leftEye = new THREE.Mesh(eyeGeometry, eyeMaterial);
@@ -773,6 +830,7 @@ function createEnemy(type = 'grunt') {
     rightEye.position.set(size * 0.3, size * 1.1, size * 0.8);
     enemyGroup.add(rightEye);
 
+    // Random spawn position around arena
     const angle = Math.random() * Math.PI * 2;
     const distance = ARENA_RADIUS + 6 + Math.random() * 4;
     enemyGroup.position.set(
@@ -794,6 +852,365 @@ function createEnemy(type = 'grunt') {
 
     scene.add(enemyGroup);
     return enemyGroup;
+}
+
+// ===== GAME START =====
+function startGame() {
+    console.log('startGame called!');
+    
+    // Check if THREE.js is loaded
+    if (typeof THREE === 'undefined') {
+        console.error('THREE.js is not loaded! Please wait and try again.');
+        alert('Error: Game engine not ready yet. Please wait a moment and try again.');
+        return;
+    }
+    
+    try {
+        console.log('Starting game...');
+        gameState = 'playing';
+        
+        // Reset stats
+        playerStats = {
+            health: 100,
+            maxHealth: 100,
+            speed: 8,
+            jumpPower: 12,
+            kills: 0,
+            score: 0,
+            speedMult: 1.0,
+            powerMult: 1.0,
+            isJumping: false,
+            velocity: new THREE.Vector3(),
+            isAttacking: false,
+            attackCooldown: 0,
+            isBlocking: false
+        };
+
+        gameTimer = 0;
+        enemySpawnTimer = 0;
+
+        // Clear scene
+        enemies.forEach(e => {
+            try { scene.remove(e); } catch (err) {}
+        });
+        enemies = [];
+        particles.forEach(p => {
+            try { scene.remove(p); } catch (err) {}
+        });
+        particles = [];
+        
+        if (player) {
+            try { scene.remove(player); } catch (err) {}
+        }
+
+        // Create player
+        console.log('Creating player...');
+        player = createPlayer();
+        console.log('Player created successfully');
+    } catch (error) {
+        console.error('Error in startGame:', error);
+        alert('Error starting game: ' + error.message);
+        return;
+    }
+
+    // Show game screen
+    document.getElementById('title-screen').classList.add('hidden');
+    document.getElementById('gameover-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+
+    // Prepare pointer lock for mouse look (user can click canvas to lock)
+    if (renderer && renderer.domElement) {
+        const canvas = renderer.domElement;
+        canvas.onclick = () => {
+            if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
+                try {
+                    canvas.requestPointerLock();
+                } catch (err) {
+                    console.warn('Pointer lock request was blocked', err);
+                }
+            }
+        };
+    }
+
+    // Start game loop
+    animate();
+}
+
+// Make startGame globally accessible IMMEDIATELY after definition
+window.startGame = startGame;
+console.log('startGame assigned to window:', typeof window.startGame);
+if (window.__samuraiLog) {
+    window.__samuraiLog(`startGame assigned to window: ${typeof window.startGame}`);
+}
+if (window.__samuraiUpdateBattleButton) {
+    window.__samuraiUpdateBattleButton(true);
+}
+
+// ===== GAME LOOP =====
+function animate() {
+    if (gameState !== 'playing') return;
+
+    deltaTime = clock.getDelta();
+    
+    update();
+    render();
+
+    requestAnimationFrame(animate);
+}
+
+function update() {
+    gameTimer += deltaTime;
+
+    // Update player
+    updatePlayer();
+
+    // Update enemies
+    updateEnemies();
+
+    // Update particles
+    updateParticles();
+
+    // Spawn enemies
+    spawnEnemies();
+
+    // Update HUD
+    updateHUD();
+
+    // Check game over
+    if (playerStats.health <= 0) {
+        gameOver();
+    }
+
+    // Score increases over time
+    playerStats.score += Math.floor(deltaTime * 10);
+}
+
+function updatePlayer() {
+    if (!player) return;
+
+    // Decrease attack cooldown
+    if (playerStats.attackCooldown > 0) {
+        playerStats.attackCooldown -= deltaTime;
+    }
+
+    // Movement
+    const moveSpeed = playerStats.speed * playerStats.speedMult * deltaTime;
+    const moveDirection = new THREE.Vector3();
+
+    if (keys['w']) moveDirection.z -= 1;
+    if (keys['s']) moveDirection.z += 1;
+    if (keys['a']) moveDirection.x -= 1;
+    if (keys['d']) moveDirection.x += 1;
+
+    moveDirection.normalize();
+
+    if (moveDirection.length() > 0) {
+        player.position.x += moveDirection.x * moveSpeed;
+        player.position.z += moveDirection.z * moveSpeed;
+
+        // Rotate player to face movement direction
+        const angle = Math.atan2(moveDirection.x, moveDirection.z);
+        player.rotation.y = angle;
+    }
+
+    // Jump
+    if (keys[' '] && !playerStats.isJumping) {
+        playerStats.velocity.y = playerStats.jumpPower;
+        playerStats.isJumping = true;
+    }
+
+    // Apply gravity
+    playerStats.velocity.y -= 30 * deltaTime;
+    player.position.y += playerStats.velocity.y * deltaTime;
+
+    // Ground check
+    if (player.position.y <= 0) {
+        player.position.y = 0;
+        playerStats.velocity.y = 0;
+        playerStats.isJumping = false;
+    }
+
+    // Keep player on platform
+    const radiusClamp = ARENA_RADIUS - 0.8;
+    const pos2D = new THREE.Vector2(player.position.x, player.position.z);
+    if (pos2D.length() > radiusClamp) {
+        pos2D.setLength(radiusClamp);
+        player.position.x = pos2D.x;
+        player.position.z = pos2D.y;
+    }
+
+    // Update sword and shield visibility
+    if (player.userData.shield) {
+        player.userData.shield.visible = playerStats.isBlocking;
+    }
+
+    // Camera follow player (third person)
+    const cameraOffset = new THREE.Vector3(-8, 12, 14);
+    camera.position.lerp(player.position.clone().add(cameraOffset), 0.08);
+    camera.lookAt(player.position.clone().add(new THREE.Vector3(0, 2.5, 0)));
+}
+
+function updateEnemies() {
+    enemies.forEach((enemy, index) => {
+        // Decrease stun timer
+        if (enemy.userData.stunned > 0) {
+            enemy.userData.stunned -= deltaTime;
+            return; // Don't move while stunned
+        }
+
+        // Move towards player
+        const direction = new THREE.Vector3();
+        direction.subVectors(player.position, enemy.position);
+        direction.y = 0;
+        direction.normalize();
+
+        const speed = enemy.userData.speed * (1 + gameTimer * 0.005) * deltaTime;
+        enemy.position.add(direction.multiplyScalar(speed));
+
+        // Rotate to face player
+        const angle = Math.atan2(direction.x, direction.z);
+        enemy.rotation.y = angle + Math.PI;
+
+        // Check collision with player
+        const distance = player.position.distanceTo(enemy.position);
+        if (distance < 2.5) {
+            if (!playerStats.isBlocking) {
+                // Damage player
+                playerStats.health -= enemy.userData.damage * deltaTime;
+                
+                // Knockback
+                const knockback = direction.multiplyScalar(-3);
+                player.position.add(knockback);
+            } else {
+                // Shield blocks and damages enemy
+                damageEnemy(enemy, 10 * playerStats.powerMult * deltaTime);
+            }
+        }
+
+        // Keep enemy on platform
+        const platformRadius = ARENA_RADIUS - 0.8;
+        const enemyPos2D = new THREE.Vector2(enemy.position.x, enemy.position.z);
+        if (enemyPos2D.length() > platformRadius) {
+            enemyPos2D.setLength(platformRadius);
+            enemy.position.x = enemyPos2D.x;
+            enemy.position.z = enemyPos2D.y;
+        }
+
+        // Check if enemy is dead
+        if (enemy.userData.health <= 0) {
+            killEnemy(enemy, index);
+        }
+    });
+}
+
+function spawnEnemies() {
+    enemySpawnTimer += deltaTime;
+    enemySpawnRate = Math.max(2, 5 - gameTimer / 20);
+
+    if (enemySpawnTimer >= enemySpawnRate) {
+        enemySpawnTimer = 0;
+
+        let type = 'grunt';
+        const rand = Math.random();
+        
+        if (gameTimer > 120) {
+            if (rand < 0.1) type = 'boss';
+            else if (rand < 0.4) type = 'tank';
+            else if (rand < 0.7) type = 'speedy';
+        } else if (gameTimer > 60) {
+            if (rand < 0.3) type = 'tank';
+            else if (rand < 0.6) type = 'speedy';
+        } else if (gameTimer > 30) {
+            if (rand < 0.3) type = 'speedy';
+        }
+
+        const enemy = createEnemy(type);
+        enemies.push(enemy);
+    }
+}
+
+function playerAttack() {
+    if (playerStats.attackCooldown > 0 || !player) return;
+
+    playerStats.attackCooldown = 0.5;
+    playerStats.isAttacking = true;
+
+    // Sword swing animation
+    if (player.userData.sword) {
+        const sword = player.userData.sword;
+        sword.rotation.z = -Math.PI / 2;
+        setTimeout(() => {
+            if (sword) sword.rotation.z = Math.PI / 4;
+        }, 200);
+    }
+
+    // Attack hitbox (cone in front of player)
+    const attackRange = 5;
+    const attackAngle = Math.PI / 3; // 60 degree cone
+
+    enemies.forEach(enemy => {
+        const toEnemy = new THREE.Vector3();
+        toEnemy.subVectors(enemy.position, player.position);
+        const distance = toEnemy.length();
+
+        if (distance < attackRange) {
+            // Check if enemy is in front of player
+            toEnemy.normalize();
+            const forward = new THREE.Vector3(Math.sin(player.rotation.y), 0, Math.cos(player.rotation.y));
+            const dot = forward.dot(toEnemy);
+
+            if (dot > Math.cos(attackAngle / 2)) {
+                // Hit!
+                const damage = 25 * playerStats.powerMult;
+                damageEnemy(enemy, damage);
+
+                // Knockback
+                const knockback = toEnemy.multiplyScalar(8);
+                enemy.position.add(knockback);
+
+                // Stun
+                enemy.userData.stunned = 1.0;
+
+                // Create hit particles
+                createHitParticles(enemy.position);
+            }
+        }
+    });
+
+    setTimeout(() => {
+        playerStats.isAttacking = false;
+    }, 200);
+}
+
+function damageEnemy(enemy, damage) {
+    enemy.userData.health -= damage;
+    
+    // Flash enemy red
+    enemy.children.forEach(child => {
+        if (child.material) {
+            const originalColor = child.material.color.clone();
+            child.material.color.setHex(0xff0000);
+            setTimeout(() => {
+                if (child.material) child.material.color = originalColor;
+            }, 100);
+        }
+    });
+}
+
+function killEnemy(enemy, index) {
+    playerStats.kills++;
+    playerStats.score += enemy.userData.points;
+
+    // Increase multipliers
+    playerStats.speedMult = Math.min(1.0 + playerStats.kills * 0.08, 5.0);
+    playerStats.powerMult = Math.min(1.0 + playerStats.kills * 0.4, 20.0);
+
+    // Create death particles
+    createDeathParticles(enemy.position);
+
+    // Remove enemy
+    scene.remove(enemy);
+    enemies.splice(index, 1);
 }
 
 function createHitParticles(position) {
@@ -834,304 +1251,24 @@ function createDeathParticles(position) {
     }
 }
 
-function updateParticles(dt) {
+function updateParticles() {
     particles.forEach((particle, index) => {
-        particle.userData.life -= dt;
+        particle.userData.life -= deltaTime;
         
         if (particle.userData.life <= 0) {
             scene.remove(particle);
             particles.splice(index, 1);
         } else {
-            particle.position.add(particle.userData.velocity.clone().multiplyScalar(dt));
-            particle.userData.velocity.y -= 10 * dt;
+            particle.position.add(particle.userData.velocity.clone().multiplyScalar(deltaTime));
+            particle.userData.velocity.y -= 10 * deltaTime; // Gravity
             
+            // Fade out
             if (particle.material) {
                 particle.material.opacity = particle.userData.life;
                 particle.material.transparent = true;
             }
         }
     });
-}
-
-// ===== GAME START =====
-function startGame() {
-    console.log('startGame called!');
-    
-    if (typeof THREE === 'undefined') {
-        console.error('THREE.js is not loaded! Please wait and try again.');
-        alert('Error: Game engine not ready yet. Please wait a moment and try again.');
-        return;
-    }
-    
-    try {
-        console.log('Starting game...');
-        gameState = 'playing';
-        
-        // Reset stats
-        playerStats = {
-            kills: 0,
-            score: 0
-        };
-
-        gameTimer = 0;
-        enemySpawnTimer = 0;
-        accumulator = 0;
-
-        // Clear scene
-        enemies.forEach(e => { try { scene.remove(e); } catch (err) {} });
-        enemies = [];
-        particles.forEach(p => { try { scene.remove(p); } catch (err) {} });
-        particles = [];
-        
-        if (player) { try { scene.remove(player); } catch (err) {} }
-
-        // Create player
-        console.log('Creating player...');
-        player = createPlayer();
-        console.log('Player created successfully');
-
-        // Get collision meshes for ground detection
-        const collisionMeshes = [];
-        scene.traverse(obj => {
-            if (obj.name === 'arenaGroup') {
-                obj.children.forEach(child => {
-                    if (child instanceof THREE.Mesh) {
-                        collisionMeshes.push(child);
-                    }
-                });
-            }
-        });
-
-        // Initialize WoW camera
-        const lockCameraCheckbox = document.getElementById('lock-camera');
-        const isLocked = lockCameraCheckbox?.checked || false;
-        
-        cameraRig = new WoWCameraRig(camera, player, {
-            dist: 14,
-            minDist: 6,
-            maxDist: 25,
-            pitch: 0.3
-        });
-        cameraRig.setLocked(isLocked);
-
-        // Initialize controls
-        controls = new Controls(renderer.domElement, {
-            onRotate: (dx, dy) => { if (cameraRig && !cameraRig.isLocked()) cameraRig.handleRotate(dx, dy); },
-            onWheel: dy => { if (cameraRig && !cameraRig.isLocked()) cameraRig.handleWheel(dy); },
-            onAttack: null, // handled in setInput
-            onBlock: null   // handled in setInput
-        });
-
-        // Initialize player controller with SM64 movement
-        playerController = new PlayerController(player, collisionMeshes, () => cameraRig ? cameraRig.getCameraYaw() : 0);
-
-        // Initialize abilities
-        abilityManager = new AbilityManager(player, scene);
-
-    } catch (error) {
-        console.error('Error in startGame:', error);
-        alert('Error starting game: ' + error.message);
-        return;
-    }
-
-    // Show game screen
-    document.getElementById('title-screen').classList.add('hidden');
-    document.getElementById('gameover-screen').classList.add('hidden');
-    document.getElementById('game-screen').classList.remove('hidden');
-
-    // Start game loop
-    clock.getDelta(); // Reset clock
-    animate();
-}
-
-window.startGame = startGame;
-console.log('startGame assigned to window:', typeof window.startGame);
-
-// ===== GAME LOOP WITH FIXED TIMESTEP =====
-function animate() {
-    if (gameState !== 'playing') return;
-
-    const dt = Math.min(clock.getDelta(), 0.1); // Cap at 100ms
-    accumulator += dt;
-
-    // Fixed timestep loop
-    while (accumulator >= FIXED_DT) {
-        fixedUpdate(FIXED_DT);
-        accumulator -= FIXED_DT;
-    }
-
-    // Render
-    if (cameraRig) cameraRig.update(dt);
-    renderer.render(scene, camera);
-
-    requestAnimationFrame(animate);
-}
-
-function fixedUpdate(dt) {
-    gameTimer += dt;
-
-    // Get input
-    const axes = controls.readAxes();
-    const edges = controls.consumeEdges();
-
-    // Update abilities
-    if (edges.abilityKeys.leaf) abilityManager.activateAbility('leaf');
-    if (edges.abilityKeys.dragon) abilityManager.activateAbility('dragon');
-    if (edges.abilityKeys.wind) abilityManager.activateAbility('wind');
-    
-    abilityManager.update(dt, edges.abilityKeys.fireBreath, edges.abilityKeys.gust);
-
-    // Update player controller
-    playerController.setInput(
-        axes.x,
-        axes.z,
-        edges.jumpPressed,
-        edges.jumpHeld,
-        edges.shieldPressed,
-        edges.shieldHeld,
-        edges.attackPressed,
-        cameraRig ? cameraRig.getCameraYaw() : 0,
-        dt
-    );
-    playerController.update(dt);
-
-    // Keep player on platform
-    const radiusClamp = ARENA_RADIUS - 0.8;
-    const pos2D = new THREE.Vector2(player.position.x, player.position.z);
-    if (pos2D.length() > radiusClamp) {
-        pos2D.setLength(radiusClamp);
-        player.position.x = pos2D.x;
-        player.position.z = pos2D.y;
-    }
-
-    // Update shield visibility
-    if (player.userData.shield) {
-        player.userData.shield.visible = edges.shieldHeld || playerController.isShieldBashing;
-    }
-
-    // Sword swing animation
-    if (playerController.isAttacking && player.userData.sword) {
-        player.userData.sword.rotation.z = -Math.PI / 2;
-        setTimeout(() => {
-            if (player.userData.sword) player.userData.sword.rotation.z = -Math.PI / 5;
-        }, 200);
-    }
-
-    // Process combat
-    const swordHits = processSwordSlash(playerController, enemies, createHitParticles);
-    const bashHits = processShieldBash(playerController, enemies, createHitParticles);
-    
-    [...swordHits, ...bashHits].forEach(hit => {
-        applyHit(hit.enemy, hit);
-    });
-
-    // Update enemies
-    updateEnemies(dt);
-
-    // Update particles
-    updateParticles(dt);
-
-    // Spawn enemies
-    spawnEnemies(dt);
-
-    // Update HUD
-    updateHUD();
-
-    // Check game over
-    if (playerController.health <= 0) {
-        gameOver();
-    }
-
-    // Score increases over time
-    playerStats.score += Math.floor(dt * 10);
-}
-
-function updateEnemies(dt) {
-    enemies.forEach((enemy, index) => {
-        if (enemy.userData.stunned > 0) {
-            enemy.userData.stunned -= dt;
-            return;
-        }
-
-        // Move towards player
-        const direction = new THREE.Vector3();
-        direction.subVectors(player.position, enemy.position);
-        direction.y = 0;
-        direction.normalize();
-
-        const speed = enemy.userData.speed * (1 + gameTimer * 0.005) * dt;
-        enemy.position.add(direction.multiplyScalar(speed));
-
-        const angle = Math.atan2(direction.x, direction.z);
-        enemy.rotation.y = angle + Math.PI;
-
-        // Check collision with player
-        const distance = player.position.distanceTo(enemy.position);
-        if (distance < 2.5) {
-            if (!playerController.isShieldBashing && !edges?.shieldHeld) {
-                playerController.health -= enemy.userData.damage * dt;
-                
-                const knockback = direction.multiplyScalar(-3);
-                player.position.add(knockback);
-            } else {
-                applyHit(enemy, { damage: 10 * playerController.powerMult * dt, stun: 0.1 });
-            }
-        }
-
-        // Keep enemy on platform
-        const platformRadius = ARENA_RADIUS - 0.8;
-        const enemyPos2D = new THREE.Vector2(enemy.position.x, enemy.position.z);
-        if (enemyPos2D.length() > platformRadius) {
-            enemyPos2D.setLength(platformRadius);
-            enemy.position.x = enemyPos2D.x;
-            enemy.position.z = enemyPos2D.y;
-        }
-
-        // Check if enemy is dead
-        if (enemy.userData.health <= 0) {
-            killEnemy(enemy, index);
-        }
-    });
-}
-
-function spawnEnemies(dt) {
-    enemySpawnTimer += dt;
-    enemySpawnRate = Math.max(2, 5 - gameTimer / 20);
-
-    if (enemySpawnTimer >= enemySpawnRate) {
-        enemySpawnTimer = 0;
-
-        let type = 'grunt';
-        const rand = Math.random();
-        
-        if (gameTimer > 120) {
-            if (rand < 0.1) type = 'boss';
-            else if (rand < 0.4) type = 'tank';
-            else if (rand < 0.7) type = 'speedy';
-        } else if (gameTimer > 60) {
-            if (rand < 0.3) type = 'tank';
-            else if (rand < 0.6) type = 'speedy';
-        } else if (gameTimer > 30) {
-            if (rand < 0.3) type = 'speedy';
-        }
-
-        const enemy = createEnemy(type);
-        enemies.push(enemy);
-    }
-}
-
-function killEnemy(enemy, index) {
-    playerStats.kills++;
-    playerStats.score += enemy.userData.points;
-
-    // Increase multipliers
-    playerController.speedMult = Math.min(1.0 + playerStats.kills * 0.08, 5.0);
-    playerController.powerMult = Math.min(1.0 + playerStats.kills * 0.4, 20.0);
-
-    createDeathParticles(enemy.position);
-
-    scene.remove(enemy);
-    enemies.splice(index, 1);
 }
 
 function updateHUD() {
@@ -1143,33 +1280,17 @@ function updateHUD() {
     document.getElementById('kills').textContent = `Kills: ${playerStats.kills}`;
     document.getElementById('score').textContent = `Score: ${Math.floor(playerStats.score)}`;
     
-    const healthPercent = Math.max(0, (playerController.health / playerController.maxHealth) * 100);
+    const healthPercent = Math.max(0, (playerStats.health / playerStats.maxHealth) * 100);
     document.getElementById('health-fill').style.width = healthPercent + '%';
     document.getElementById('health-text').textContent = 
-        `HP: ${Math.max(0, Math.floor(playerController.health))}/${playerController.maxHealth}`;
+        `HP: ${Math.max(0, Math.floor(playerStats.health))}/${playerStats.maxHealth}`;
     
-    document.getElementById('speed-mult').textContent = `⚡ Speed: x${playerController.speedMult.toFixed(1)}`;
-    document.getElementById('power-mult').textContent = `💪 Power: x${playerController.powerMult.toFixed(1)}`;
+    document.getElementById('speed-mult').textContent = `⚡ Speed: x${playerStats.speedMult.toFixed(1)}`;
+    document.getElementById('power-mult').textContent = `💪 Power: x${playerStats.powerMult.toFixed(1)}`;
+}
 
-    // Update ability HUD
-    const abilityInfo = abilityManager.getAbilityInfo();
-    ['leaf', 'dragon', 'wind'].forEach(type => {
-        const elem = document.getElementById(`ability-${type}`);
-        const info = abilityInfo[type];
-        const timeElem = elem.querySelector('.ability-time');
-        
-        elem.classList.remove('active', 'cooldown');
-        
-        if (abilityInfo.active === type) {
-            elem.classList.add('active');
-            timeElem.textContent = `${Math.ceil(info.timeLeft)}s`;
-        } else if (info.cooldownLeft > 0) {
-            elem.classList.add('cooldown');
-            timeElem.textContent = `CD: ${Math.ceil(info.cooldownLeft)}s`;
-        } else {
-            timeElem.textContent = 'Ready';
-        }
-    });
+function render() {
+    renderer.render(scene, camera);
 }
 
 function gameOver() {
@@ -1182,21 +1303,40 @@ function gameOver() {
         `Time Survived: ${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
     document.getElementById('final-score').textContent = `Final Score: ${Math.floor(playerStats.score)}`;
     document.getElementById('final-kills').textContent = `Total Kills: ${playerStats.kills}`;
-    document.getElementById('final-speed').textContent = `Max Speed: x${playerController.speedMult.toFixed(1)}`;
-    document.getElementById('final-power').textContent = `Max Power: x${playerController.powerMult.toFixed(1)}`;
+    document.getElementById('final-speed').textContent = `Max Speed: x${playerStats.speedMult.toFixed(1)}`;
+    document.getElementById('final-power').textContent = `Max Power: x${playerStats.powerMult.toFixed(1)}`;
 
     document.getElementById('game-screen').classList.add('hidden');
     document.getElementById('gameover-screen').classList.remove('hidden');
 
+    // Exit pointer lock
     if (document.exitPointerLock) {
         document.exitPointerLock();
     }
 }
 
-// Start initialization
+// Ensure startGame is always on window (even if there were errors)
+if (typeof startGame !== 'undefined') {
+    window.startGame = startGame;
+    console.log('Final check: startGame assigned to window:', typeof window.startGame);
+    if (window.__samuraiLog) {
+        window.__samuraiLog(`Final check: startGame assigned to window: ${typeof window.startGame}`);
+    }
+    if (window.__samuraiUpdateBattleButton) {
+        window.__samuraiUpdateBattleButton(true);
+    }
+} else {
+    console.error('CRITICAL: startGame function is undefined!');
+    if (window.__samuraiLog) {
+        window.__samuraiLog('CRITICAL: startGame function is undefined!', true);
+    }
+}
+
+// Start initialization when page loads
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
 } else {
+    // DOM is already loaded
     init();
 }
 
