@@ -918,8 +918,14 @@ function startGame() {
         controls = new Controls(renderer.domElement, {
             onRotate: (dx, dy) => { if (cameraRig && !cameraRig.isLocked()) cameraRig.handleRotate(dx, dy); },
             onWheel: dy => { if (cameraRig && !cameraRig.isLocked()) cameraRig.handleWheel(dy); },
-            onAttack: null, // handled in setInput
-            onBlock: null   // handled in setInput
+            onAttack: () => {
+                // Left click triggers attack
+                console.log('Attack triggered!');
+            },
+            onBlock: (isBlocking) => {
+                // Right click toggles shield
+                console.log('Shield:', isBlocking);
+            }
         });
 
         // Initialize player controller with SM64 movement
