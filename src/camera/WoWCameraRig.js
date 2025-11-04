@@ -23,6 +23,17 @@ export class WoWCameraRig {
     this.smoothTau = opts.smoothTau ?? 0.12; // seconds
     this.tmpQuat = new THREE.Quaternion();
     this.tmpV = new THREE.Vector3();
+    
+    // Initialize camera position immediately
+    this.initializePosition();
+  }
+  
+  initializePosition() {
+    const q = this.tmpQuat.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+    const offset = this.tmpV.set(0, 2.5, this.dist).applyQuaternion(q);
+    this.currentPos.copy(this.target.position).add(offset);
+    this.cam.position.copy(this.currentPos);
+    this.cam.lookAt(this.target.position.clone().add(new THREE.Vector3(0, 2.5, 0)));
   }
 
   setLocked(v) { this.locked = !!v; }

@@ -23,21 +23,29 @@ export class Controls {
 
     // Mouse buttons
     canvas.addEventListener('mousedown', e => {
+      const wasOrbiting = this.orbiting;
+      
       if (e.button === 0) {
         this.leftDown = true;
-        // Only fire attack when not orbiting
-        if (!this.orbiting && onAttack) {
-          this.attackPressed = true;
-        }
       }
       if (e.button === 2) {
         this.rightDown = true;
-        if (!this.orbiting && onBlock) {
+      }
+      
+      this.updateOrbit(onRotate);
+      
+      // Only fire attack/block if we're NOT entering orbit mode
+      if (!this.orbiting) {
+        if (e.button === 0) {
+          this.attackPressed = true;
+          if (onAttack) onAttack();
+        }
+        if (e.button === 2) {
           this.shieldPressed = true;
           this.shieldHeld = true;
+          if (onBlock) onBlock(true);
         }
       }
-      this.updateOrbit(onRotate);
     });
 
     window.addEventListener('mouseup', e => {
