@@ -907,25 +907,30 @@ function startGame() {
         const isLocked = lockCameraCheckbox?.checked || false;
         
         cameraRig = new WoWCameraRig(camera, player, {
-            dist: 14,
-            minDist: 6,
-            maxDist: 25,
-            pitch: 0.4,  // Slightly higher angle
-            yaw: Math.PI  // Start behind player (180 degrees)
+            dist: 4.0,
+            minDist: 2.2,
+            maxDist: 8.0,
+            pitch: 0.2,
+            yaw: 0,
+            eyeHeight: 1.35
         });
         cameraRig.setLocked(isLocked);
+        cameraRig.snapNow(); // Prevent starting under the arena
 
         // Initialize controls
         controls = new Controls(renderer.domElement, {
-            onRotate: (dx, dy) => { if (cameraRig && !cameraRig.isLocked()) cameraRig.handleRotate(dx, dy); },
-            onWheel: dy => { if (cameraRig && !cameraRig.isLocked()) cameraRig.handleWheel(dy); },
-            onAttack: () => {
-                // Left click triggers attack
-                console.log('Attack triggered!');
+            onRotate: (dx, dy) => { if (!cameraRig.isLocked()) cameraRig.handleRotate(dx, dy); },
+            onWheel:  dy       => { if (!cameraRig.isLocked()) cameraRig.handleWheel(dy); },
+            onAttack: ()       => { 
+                if (playerController) {
+                    playerController.isAttacking = true;
+                    playerController.attackCooldown = 0.5;
+                }
             },
-            onBlock: (isBlocking) => {
-                // Right click toggles shield
-                console.log('Shield:', isBlocking);
+            onBlock:  held     => { 
+                if (playerController) {
+                    // Will be read in consumeEdges for shield visibility
+                }
             }
         });
 
@@ -979,24 +984,17 @@ function fixedUpdate(dt) {
 
     // Get input
     const axes = controls.readAxes();
-    const edges = controls.consumeEdges();
+    const jump = controls.consumeJumpEdge();
 
-    // Update abilities
-    if (edges.abilityKeys.leaf) abilityManager.activateAbility('leaf');
-    if (edges.abilityKeys.dragon) abilityManager.activateAbility('dragon');
-    if (edges.abilityKeys.wind) abilityManager.activateAbility('wind');
-    
-    abilityManager.update(dt, edges.abilityKeys.fireBreath, edges.abilityKeys.gust);
-
-    // Update player controller
+    // Update player controller (simplified for now - abilities to be re-added)
     playerController.setInput(
         axes.x,
         axes.z,
-        edges.jumpPressed,
-        edges.jumpHeld,
-        edges.shieldPressed,
-        edges.shieldHeld,
-        edges.attackPressed,
+        jump.jumpPressed,
+        jump.jumpHeld,
+        false, // shieldPressed
+        false, // shieldHeld
+        false, // attackPressed
         cameraRig ? cameraRig.getCameraYaw() : 0,
         dt
     );
@@ -1013,7 +1011,7 @@ function fixedUpdate(dt) {
 
     // Update shield visibility
     if (player.userData.shield) {
-        player.userData.shield.visible = edges.shieldHeld || playerController.isShieldBashing;
+        player.userData.shield.visible = playerController.isShieldBashing;
     }
 
     // Sword swing animation
@@ -1033,7 +1031,7 @@ function fixedUpdate(dt) {
     });
 
     // Update enemies
-    updateEnemies(dt, edges);
+    updateEnemies(dt);
 
     // Update particles
     updateParticles(dt);
@@ -1053,7 +1051,7 @@ function fixedUpdate(dt) {
     playerStats.score += Math.floor(dt * 10);
 }
 
-function updateEnemies(dt, edges) {
+function updateEnemies(dt) {
     enemies.forEach((enemy, index) => {
         if (enemy.userData.stunned > 0) {
             enemy.userData.stunned -= dt;
@@ -1075,7 +1073,7 @@ function updateEnemies(dt, edges) {
         // Check collision with player
         const distance = player.position.distanceTo(enemy.position);
         if (distance < 2.5) {
-            const isBlocking = edges?.shieldHeld || playerController.isShieldBashing;
+            const isBlocking = playerController.isShieldBashing;
             if (!isBlocking) {
                 playerController.health -= enemy.userData.damage * dt;
                 
@@ -1159,23 +1157,14 @@ function updateHUD() {
     document.getElementById('speed-mult').textContent = `⚡ Speed: x${playerController.speedMult.toFixed(1)}`;
     document.getElementById('power-mult').textContent = `💪 Power: x${playerController.powerMult.toFixed(1)}`;
 
-    // Update ability HUD
-    const abilityInfo = abilityManager.getAbilityInfo();
+    // Update ability HUD (simplified for now)
     ['leaf', 'dragon', 'wind'].forEach(type => {
         const elem = document.getElementById(`ability-${type}`);
-        const info = abilityInfo[type];
-        const timeElem = elem.querySelector('.ability-time');
-        
-        elem.classList.remove('active', 'cooldown');
-        
-        if (abilityInfo.active === type) {
-            elem.classList.add('active');
-            timeElem.textContent = `${Math.ceil(info.timeLeft)}s`;
-        } else if (info.cooldownLeft > 0) {
-            elem.classList.add('cooldown');
-            timeElem.textContent = `CD: ${Math.ceil(info.cooldownLeft)}s`;
-        } else {
-            timeElem.textContent = 'Ready';
+        if (elem) {
+            const timeElem = elem.querySelector('.ability-time');
+            if (timeElem) {
+                timeElem.textContent = 'Coming Soon';
+            }
         }
     });
 }

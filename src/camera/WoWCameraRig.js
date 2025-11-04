@@ -1,77 +1,76 @@
 export class WoWCameraRig {
   constructor(camera, target, opts = {}) {
     this.cam = camera;
-    this.target = target; // THREE.Object3D the camera follows
+    this.target = target;
 
-    // Spherical orbit state
-    this.yaw = opts.yaw ?? 0;            // around Y
-    this.pitch = opts.pitch ?? 0.3;      // up-down
+    this.yaw = opts.yaw ?? 0;
+    this.pitch = opts.pitch ?? 0.2;
+
+    this.eyeHeight = opts.eyeHeight ?? 1.35; // not rotated by pitch
     this.minPitch = (opts.minPitchDeg ?? -15) * Math.PI / 180;
-    this.maxPitch = (opts.maxPitchDeg ?? 50) * Math.PI / 180;
+    this.maxPitch = (opts.maxPitchDeg ?? 45) * Math.PI / 180;
 
-    this.dist = opts.dist ?? 14;
-    this.minDist = opts.minDist ?? 6.0;
-    this.maxDist = opts.maxDist ?? 25.0;
+    this.dist = opts.dist ?? 4.0;
+    this.minDist = opts.minDist ?? 2.2;
+    this.maxDist = opts.maxDist ?? 8.0;
 
     this.rotateSpeed = opts.rotateSpeed ?? 0.0025;
-    this.zoomSpeed = opts.zoomSpeed ?? 0.0015;
+    this.zoomSpeed   = opts.zoomSpeed   ?? 0.0015;
 
+    this.smoothTau = opts.smoothTau ?? 0.16;
     this.locked = false;
 
-    // Smoothing
-    this.currentPos = new THREE.Vector3();
-    this.smoothTau = opts.smoothTau ?? 0.12; // seconds
-    this.tmpQuat = new THREE.Quaternion();
-    this.tmpV = new THREE.Vector3();
-    
-    // Initialize camera position immediately
-    this.initializePosition();
-  }
-  
-  initializePosition() {
-    // Start camera at a good initial angle (behind and above player)
-    const q = this.tmpQuat.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
-    const offset = this.tmpV.set(0, 0, this.dist).applyQuaternion(q);
-    offset.y += 2.5; // Add height offset
-    this.currentPos.copy(this.target.position).add(offset);
-    this.cam.position.copy(this.currentPos);
-    this.cam.lookAt(this.target.position.clone().add(new THREE.Vector3(0, 2.5, 0)));
+    this._cur = new THREE.Vector3();
+    this._q   = new THREE.Quaternion();
+    this._off = new THREE.Vector3();
   }
 
   setLocked(v) { this.locked = !!v; }
-  isLocked() { return this.locked; }
+  isLocked()   { return this.locked; }
 
-  // Called when both mouse buttons are held and mouse is moved
   handleRotate(dx, dy) {
     if (this.locked) return;
-    this.yaw -= dx * this.rotateSpeed;
+    this.yaw   -= dx * this.rotateSpeed;
     const newPitch = this.pitch - dy * this.rotateSpeed;
-    this.pitch = Math.max(this.minPitch, Math.min(this.maxPitch, newPitch));
+    this.pitch  = Math.max(this.minPitch, Math.min(this.maxPitch, newPitch));
   }
 
-  // Mouse wheel
-  handleWheel(deltaY) {
+  handleWheel(dy) {
     if (this.locked) return;
-    const newDist = this.dist + deltaY * this.zoomSpeed * this.dist;
+    const k = Math.sign(dy) * Math.min(Math.abs(dy), 200);
+    const newDist = this.dist + k * this.zoomSpeed;
     this.dist = Math.max(this.minDist, Math.min(this.maxDist, newDist));
   }
 
-  // Expose yaw so movement can be camera-relative
   getCameraYaw() { return this.yaw; }
 
+  _lookAt() {
+    // slight downward aim to center the character
+    return this.target.position.clone().add(new THREE.Vector3(0, this.eyeHeight - 0.45, 0));
+  }
+
+  _desired() {
+    // base eye height that does not rotate
+    const base = this.target.position.clone().add(new THREE.Vector3(0, this.eyeHeight, 0));
+    // orbit offset that *does* rotate
+    this._q.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
+    this._off.set(0, 0, this.dist).applyQuaternion(this._q);
+    return base.add(this._off);
+  }
+
+  snapNow() {
+    const p = this._desired();
+    this._cur.copy(p);
+    this.cam.position.copy(p);
+    this.cam.lookAt(this._lookAt());
+  }
+
   update(dt) {
-    // Desired position in spherical around target
-    const q = this.tmpQuat.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
-    const offset = this.tmpV.set(0, 0, this.dist).applyQuaternion(q);
-    offset.y += 2.5; // Add height offset
-    const desired = this.target.position.clone().add(offset);
-
-    // Exponential smoothing
+    const desired = this._desired();
     const a = 1 - Math.exp(-dt / this.smoothTau);
-    this.currentPos.lerp(desired, a);
-
-    this.cam.position.copy(this.currentPos);
-    this.cam.lookAt(this.target.position.clone().add(new THREE.Vector3(0, 2.5, 0)));
+    this._cur.lerp(desired, a);
+    this.cam.position.copy(this._cur);
+    this.cam.lookAt(this._lookAt());
   }
 }
 

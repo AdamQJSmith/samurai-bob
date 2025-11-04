@@ -1,9 +1,11 @@
 export class Controls {
-  constructor(canvas, {
-    onRotate, onWheel,
-    onAttack, onBlock,
-  }) {
+  constructor(canvas, { onRotate, onWheel, onAttack, onBlock }) {
     this.canvas = canvas;
+    this.onRotate = onRotate;
+    this.onWheel  = onWheel;
+    this.onAttack = onAttack;
+    this.onBlock  = onBlock;
+
     this.leftDown = false;
     this.rightDown = false;
     this.orbiting = false;
@@ -11,115 +13,69 @@ export class Controls {
     this.keys = new Set();
     this.jumpPressed = false;
     this.jumpHeld = false;
-    this.shieldPressed = false;
-    this.shieldHeld = false;
-    this.attackPressed = false;
 
-    // Ability keys
-    this.abilityKeys = { leaf: false, dragon: false, wind: false, fireBreath: false, gust: false };
-
-    // Prevent context menu
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 
-    // Mouse buttons
+    const enterOrbit = () => {
+      if (this.orbiting) return;
+      this.canvas.requestPointerLock?.();
+      this.orbiting = true;
+    };
+    const exitOrbit = () => {
+      if (!this.orbiting) return;
+      document.exitPointerLock?.();
+      this.orbiting = false;
+    };
+
     canvas.addEventListener('mousedown', e => {
-      const wasOrbiting = this.orbiting;
-      
-      if (e.button === 0) {
-        this.leftDown = true;
+      if (e.button === 0) this.leftDown  = true;
+      if (e.button === 2) this.rightDown = true;
+
+      const both = this.leftDown && this.rightDown;
+      if (both) {
+        enterOrbit();
+        return; // do not fire attack or block on the same frame orbit begins
       }
-      if (e.button === 2) {
-        this.rightDown = true;
-      }
-      
-      this.updateOrbit(onRotate);
-      
-      // Only fire attack/block if we're NOT entering orbit mode
+
+      // single-button actions
       if (!this.orbiting) {
-        if (e.button === 0) {
-          this.attackPressed = true;
-          console.log('Left click - Attack!');
-          if (onAttack) onAttack();
-        }
-        if (e.button === 2) {
-          this.shieldPressed = true;
-          this.shieldHeld = true;
-          console.log('Right click - Shield!');
-          if (onBlock) onBlock(true);
-        }
-      } else {
-        console.log('In orbit mode, clicks ignored');
+        if (e.button === 0 && this.onAttack) this.onAttack();
+        if (e.button === 2 && this.onBlock)  this.onBlock(true);
       }
     });
 
     window.addEventListener('mouseup', e => {
-      if (e.button === 0) this.leftDown = false;
+      if (e.button === 0) this.leftDown  = false;
       if (e.button === 2) {
         this.rightDown = false;
-        this.shieldHeld = false;
-        if (onBlock) onBlock(false);
+        this.onBlock?.(false);
       }
-      this.updateOrbit(onRotate);
+      if (!(this.leftDown && this.rightDown)) exitOrbit();
     });
 
     window.addEventListener('mousemove', e => {
-      if (this.orbiting && onRotate) onRotate(e.movementX ?? 0, e.movementY ?? 0);
+      if (this.orbiting) this.onRotate?.(e.movementX ?? 0, e.movementY ?? 0);
     });
 
-    canvas.addEventListener('wheel', e => {
-      if (onWheel) onWheel(e.deltaY);
-    }, { passive: true });
+    canvas.addEventListener('wheel', e => this.onWheel?.(e.deltaY), { passive: true });
 
-    // Keyboard
+    // Defensive resets if the window loses focus or cursor leaves the canvas
+    window.addEventListener('blur', () => { this.leftDown = this.rightDown = false; exitOrbit(); });
+    canvas.addEventListener('mouseleave', () => { this.leftDown = this.rightDown = false; exitOrbit(); });
+
+    // keyboard
     window.addEventListener('keydown', e => {
-      const code = e.code;
-      if (['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft','KeyJ','KeyK','KeyQ','Digit1','Digit2','Digit3'].includes(code)) {
-        e.preventDefault();
-      }
-      this.keys.add(code);
-      
-      if (code === 'Space') {
-        this.jumpPressed = true;
-        this.jumpHeld = true;
-      }
-      if (code === 'ShiftLeft') {
-        this.shieldPressed = true;
-        this.shieldHeld = true;
-      }
-      if (code === 'KeyJ') this.attackPressed = true;
-      if (code === 'KeyK') this.abilityKeys.fireBreath = true;
-      if (code === 'KeyQ') this.abilityKeys.gust = true;
-      if (code === 'Digit1') this.abilityKeys.leaf = true;
-      if (code === 'Digit2') this.abilityKeys.dragon = true;
-      if (code === 'Digit3') this.abilityKeys.wind = true;
-    }, { passive: false });
+      if (['KeyW','KeyA','KeyS','KeyD','Space','ShiftLeft'].includes(e.code)) e.preventDefault();
+      this.keys.add(e.code);
+      if (e.code === 'Space') { this.jumpPressed = true; this.jumpHeld = true; }
+      if (e.code === 'ShiftLeft') this.onBlock?.(true);
+    }, { passive:false });
 
     window.addEventListener('keyup', e => {
-      const code = e.code;
-      this.keys.delete(code);
-      
-      if (code === 'Space') this.jumpHeld = false;
-      if (code === 'ShiftLeft') this.shieldHeld = false;
-      if (code === 'KeyK') this.abilityKeys.fireBreath = false;
+      this.keys.delete(e.code);
+      if (e.code === 'Space') this.jumpHeld = false;
+      if (e.code === 'ShiftLeft') this.onBlock?.(false);
     });
-
-    // Pointer lock release
-    document.addEventListener('pointerlockchange', () => {
-      if (document.pointerLockElement !== this.canvas) this.orbiting = false;
-    });
-  }
-
-  updateOrbit(onRotate) {
-    const wantOrbit = this.leftDown && this.rightDown;
-    if (wantOrbit && !this.orbiting) {
-      this.canvas.requestPointerLock?.();
-      this.orbiting = true;
-    } else if (!wantOrbit && this.orbiting) {
-      document.exitPointerLock?.();
-      this.orbiting = false;
-      // Small nudge so a stuck delta does not linger
-      if (onRotate) onRotate(0, 0);
-    }
   }
 
   readAxes() {
@@ -128,26 +84,9 @@ export class Controls {
     return { x, z };
   }
 
-  consumeEdges() {
-    const result = {
-      jumpPressed: this.jumpPressed,
-      jumpHeld: this.jumpHeld,
-      shieldPressed: this.shieldPressed,
-      shieldHeld: this.shieldHeld,
-      attackPressed: this.attackPressed,
-      abilityKeys: { ...this.abilityKeys }
-    };
-    
-    // Clear edge triggers
+  consumeJumpEdge() {
+    const pressed = this.jumpPressed;
     this.jumpPressed = false;
-    this.shieldPressed = false;
-    this.attackPressed = false;
-    this.abilityKeys.leaf = false;
-    this.abilityKeys.dragon = false;
-    this.abilityKeys.wind = false;
-    this.abilityKeys.gust = false;
-    
-    return result;
+    return { jumpPressed: pressed, jumpHeld: this.jumpHeld };
   }
 }
-
