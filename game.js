@@ -1026,7 +1026,7 @@ function fixedUpdate(dt) {
     });
 
     // Update enemies
-    updateEnemies(dt);
+    updateEnemies(dt, edges);
 
     // Update particles
     updateParticles(dt);
@@ -1046,7 +1046,7 @@ function fixedUpdate(dt) {
     playerStats.score += Math.floor(dt * 10);
 }
 
-function updateEnemies(dt) {
+function updateEnemies(dt, edges) {
     enemies.forEach((enemy, index) => {
         if (enemy.userData.stunned > 0) {
             enemy.userData.stunned -= dt;
@@ -1068,7 +1068,8 @@ function updateEnemies(dt) {
         // Check collision with player
         const distance = player.position.distanceTo(enemy.position);
         if (distance < 2.5) {
-            if (!playerController.isShieldBashing && !edges?.shieldHeld) {
+            const isBlocking = edges?.shieldHeld || playerController.isShieldBashing;
+            if (!isBlocking) {
                 playerController.health -= enemy.userData.damage * dt;
                 
                 const knockback = direction.multiplyScalar(-3);
