@@ -910,7 +910,8 @@ function startGame() {
             dist: 14,
             minDist: 6,
             maxDist: 25,
-            pitch: 0.3
+            pitch: 0.4,  // Slightly higher angle
+            yaw: Math.PI  // Start behind player (180 degrees)
         });
         cameraRig.setLocked(isLocked);
 

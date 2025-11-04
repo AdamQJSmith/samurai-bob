@@ -38,13 +38,17 @@ export class Controls {
       if (!this.orbiting) {
         if (e.button === 0) {
           this.attackPressed = true;
+          console.log('Left click - Attack!');
           if (onAttack) onAttack();
         }
         if (e.button === 2) {
           this.shieldPressed = true;
           this.shieldHeld = true;
+          console.log('Right click - Shield!');
           if (onBlock) onBlock(true);
         }
+      } else {
+        console.log('In orbit mode, clicks ignored');
       }
     });
 
