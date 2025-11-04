@@ -29,8 +29,10 @@ export class WoWCameraRig {
   }
   
   initializePosition() {
+    // Start camera at a good initial angle (behind and above player)
     const q = this.tmpQuat.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
-    const offset = this.tmpV.set(0, 2.5, this.dist).applyQuaternion(q);
+    const offset = this.tmpV.set(0, 0, this.dist).applyQuaternion(q);
+    offset.y += 2.5; // Add height offset
     this.currentPos.copy(this.target.position).add(offset);
     this.cam.position.copy(this.currentPos);
     this.cam.lookAt(this.target.position.clone().add(new THREE.Vector3(0, 2.5, 0)));
@@ -60,7 +62,8 @@ export class WoWCameraRig {
   update(dt) {
     // Desired position in spherical around target
     const q = this.tmpQuat.setFromEuler(new THREE.Euler(this.pitch, this.yaw, 0, 'YXZ'));
-    const offset = this.tmpV.set(0, 2.5, this.dist).applyQuaternion(q);
+    const offset = this.tmpV.set(0, 0, this.dist).applyQuaternion(q);
+    offset.y += 2.5; // Add height offset
     const desired = this.target.position.clone().add(offset);
 
     // Exponential smoothing
