@@ -301,6 +301,39 @@ body {
     border-color: #4facfe;
     background: rgba(79,172,254,0.3);
     box-shadow: 0 0 15px rgba(79,172,254,0.5);
+    animation: pulse-glow 1s ease-in-out infinite;
+}
+
+@keyframes pulse-glow {
+    0%, 100% { box-shadow: 0 0 15px rgba(79,172,254,0.5); }
+    50% { box-shadow: 0 0 25px rgba(79,172,254,0.8); }
+}
+
+#ability-leaf {
+    border-color: rgba(68, 170, 68, 0.5);
+}
+#ability-leaf.active {
+    border-color: #44aa44;
+    background: rgba(68, 170, 68, 0.3);
+    box-shadow: 0 0 15px rgba(68, 170, 68, 0.5);
+}
+
+#ability-dragon {
+    border-color: rgba(255, 68, 0, 0.5);
+}
+#ability-dragon.active {
+    border-color: #ff4400;
+    background: rgba(255, 68, 0, 0.3);
+    box-shadow: 0 0 15px rgba(255, 68, 0, 0.5);
+}
+
+#ability-wind {
+    border-color: rgba(136, 204, 255, 0.5);
+}
+#ability-wind.active {
+    border-color: #88ccff;
+    background: rgba(136, 204, 255, 0.3);
+    box-shadow: 0 0 15px rgba(136, 204, 255, 0.5);
 }
 
 .ability-icon.cooldown {
