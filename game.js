@@ -3651,13 +3651,66 @@ function updateLeafForm() {
     
     // Invincible in leaf form - no damage taken
 
-    // Attack to solidify - check multiple triggers: J key, E key, Space, or mouse click
-    const attackPressed = keys['j'] || keys['e'] || keys[' '] || mouseDown[0] || playerStats.leafAttackQueued;
-    if (attackPressed) {
-        solidifyFromLeaves();
+    // Attack with leaf swoosh - stays in leaf form
+    const attackPressed = keys['j'] || keys['e'] || mouseDown[0] || playerStats.leafAttackQueued;
+    if (attackPressed && playerStats.attackCooldown <= 0) {
+        leafSwooshAttack();
         mouseDown[0] = false;
         playerStats.leafAttackQueued = false;
     }
+}
+
+function leafSwooshAttack() {
+    playerStats.attackCooldown = 0.4; // Brief cooldown
+
+    const center = player.position.clone();
+
+    // Play swoosh sound
+    if (audioManager) audioManager.play('swordSwing', 0.7);
+
+    // Damage all nearby enemies
+    enemies.forEach(enemy => {
+        const dist = center.distanceTo(enemy.position);
+        if (dist < 7) {
+            const damage = 35 * playerStats.powerMult;
+            damageEnemy(enemy, damage);
+            createHitParticles(enemy.position);
+
+            // Light knockback
+            const knockDir = new THREE.Vector3().subVectors(enemy.position, center).normalize();
+            enemy.position.add(knockDir.multiplyScalar(3));
+            enemy.userData.stunned = 0.3;
+        }
+    });
+
+    // Create swooshing leaf particles that fly outward
+    for (let i = 0; i < 12; i++) {
+        const leafGeo = new THREE.PlaneGeometry(0.5, 0.7);
+        const leafMat = new THREE.MeshBasicMaterial({
+            color: Math.random() > 0.5 ? 0x44cc44 : 0x88dd44,
+            side: THREE.DoubleSide,
+            transparent: true
+        });
+        const leaf = new THREE.Mesh(leafGeo, leafMat);
+
+        const angle = (i / 12) * Math.PI * 2;
+        leaf.position.copy(center);
+        leaf.position.y += 1.5;
+
+        leaf.userData.velocity = new THREE.Vector3(
+            Math.cos(angle) * 12,
+            (Math.random() - 0.3) * 4,
+            Math.sin(angle) * 12
+        );
+        leaf.userData.life = 0.5;
+        leaf.userData.spinSpeed = 10 + Math.random() * 5;
+
+        scene.add(leaf);
+        particles.push(leaf);
+    }
+
+    // Screen shake for impact
+    triggerScreenShake(0.2, 0.1);
 }
 
 function solidifyFromLeaves() {
