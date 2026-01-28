@@ -403,20 +403,19 @@ function init() {
     try {
         // Setup Three.js
         scene = new THREE.Scene();
-        // Soft blue sky like reference
-        scene.background = new THREE.Color(0x88aabb);
-        scene.fog = new THREE.Fog(0x99bbcc, 80, 200);
+        // Muted grayish-blue sky matching reference exactly
+        scene.background = new THREE.Color(0x7a9ab8);
+        scene.fog = new THREE.Fog(0x8aaabc, 120, 300);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        
+
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.toneMapping = THREE.ACESFilmicToneMapping;
-        renderer.toneMappingExposure = 1.05;
-        renderer.setClearColor(0x88aabb, 1);
+        renderer.toneMapping = THREE.NoToneMapping;
+        renderer.setClearColor(0x7a9ab8, 1);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         clock = new THREE.Clock();
@@ -426,14 +425,14 @@ function init() {
         return;
     }
 
-    // Lighting - soft and balanced
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    // Lighting - softer, not too bright
+    const ambientLight = new THREE.AmbientLight(0xcccccc, 0.4);
     scene.add(ambientLight);
 
-    const hemisphereLight = new THREE.HemisphereLight(0xffeedd, 0x88aa88, 0.4);
+    const hemisphereLight = new THREE.HemisphereLight(0xccccbb, 0x667766, 0.3);
     scene.add(hemisphereLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xfff5e6, 0.7);
+    const directionalLight = new THREE.DirectionalLight(0xeeeedd, 0.6);
     directionalLight.position.set(50, 100, 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.left = -100;
@@ -541,14 +540,14 @@ function createArena() {
     const arenaGroup = new THREE.Group();
     arenaGroup.name = 'arenaGroup';
 
-    // Green grass matching reference - natural, not neon
-    const grassColor = 0x5a8a4a;
+    // Grass color from reference - natural green
+    const grassColor = 0x5a9a5a;
 
-    // Flat grass top - simple and clean
+    // Flat grass top
     const topGeo = new THREE.CircleGeometry(ARENA_RADIUS, 64);
     const topMat = new THREE.MeshStandardMaterial({
         color: grassColor,
-        roughness: 0.8,
+        roughness: 0.9,
         metalness: 0.0
     });
     const topMesh = new THREE.Mesh(topGeo, topMat);
@@ -557,16 +556,16 @@ function createArena() {
     topMesh.receiveShadow = true;
     arenaGroup.add(topMesh);
 
-    // Curved sides going DOWN (floating island style like reference)
+    // Curved dirt sides going DOWN (floating island)
     const sideGeo = new THREE.CylinderGeometry(ARENA_RADIUS, ARENA_RADIUS * 0.7, 3, 64, 1, true);
-    const sideMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.9, metalness: 0 });
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0x7a5a3a, roughness: 0.9, metalness: 0 });
     const sideMesh = new THREE.Mesh(sideGeo, sideMat);
     sideMesh.position.y = -1.5;
     arenaGroup.add(sideMesh);
 
     // Bottom cap
     const bottomGeo = new THREE.CircleGeometry(ARENA_RADIUS * 0.7, 64);
-    const bottomMat = new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.9, metalness: 0 });
+    const bottomMat = new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 0.9, metalness: 0 });
     const bottomMesh = new THREE.Mesh(bottomGeo, bottomMat);
     bottomMesh.rotation.x = Math.PI / 2;
     bottomMesh.position.y = -3;
@@ -602,14 +601,14 @@ function addBackgroundElements() {
     const backgroundGroup = new THREE.Group();
     backgroundGroup.name = 'backgroundGroup';
 
-    // Rolling green hills in background - muted
+    // Rolling green hills - darker muted green like reference
     const hillColor = 0x4a7a4a;
     for (let i = 0; i < 6; i++) {
         const radius = 20 + Math.random() * 10;
-        const hillGeo = new THREE.SphereGeometry(radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
+        const hillGeo = new THREE.SphereGeometry(radius, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2);
         const hillMat = new THREE.MeshStandardMaterial({
             color: hillColor,
-            roughness: 0.8,
+            roughness: 0.9,
             metalness: 0.0
         });
         const hill = new THREE.Mesh(hillGeo, hillMat);
@@ -623,24 +622,24 @@ function addBackgroundElements() {
         backgroundGroup.add(hill);
     }
 
-    // Large tree trunk on the right like reference
-    const trunkGeo = new THREE.CylinderGeometry(3, 4, 20, 32);
-    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x7a5c3a, roughness: 0.9, metalness: 0.0 });
+    // Large tree trunk - brown like reference
+    const trunkGeo = new THREE.CylinderGeometry(3, 4, 20, 24);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x6a4a3a, roughness: 0.9, metalness: 0.0 });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.set(22, 5, -5);
     backgroundGroup.add(trunk);
 
-    // Tree foliage
-    const foliageGeo = new THREE.SphereGeometry(9, 32, 32);
-    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3d8b3d, roughness: 0.7, metalness: 0.0 });
+    // Tree foliage - muted green
+    const foliageGeo = new THREE.SphereGeometry(9, 24, 24);
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4a7a4a, roughness: 0.8, metalness: 0.0 });
     const foliage = new THREE.Mesh(foliageGeo, foliageMat);
     foliage.position.set(22, 18, -5);
     backgroundGroup.add(foliage);
 
-    // Simple white clouds
+    // White clouds - soft
     for (let i = 0; i < 6; i++) {
-        const cloudGeo = new THREE.SphereGeometry(4 + Math.random() * 3, 16, 16);
-        const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0 });
+        const cloudGeo = new THREE.SphereGeometry(4 + Math.random() * 3, 12, 12);
+        const cloudMat = new THREE.MeshStandardMaterial({ color: 0xeeeeee, roughness: 1, metalness: 0 });
         const cloud = new THREE.Mesh(cloudGeo, cloudMat);
         cloud.position.set(
             (Math.random() - 0.5) * 120,
@@ -660,40 +659,40 @@ function createPlayer() {
     playerGroup.name = 'samuraiBob';
 
     // Poly counts
-    const HP = 24;
-    const MP = 16;
+    const HP = 16;
+    const MP = 12;
 
-    // Colors matching reference - muted, not too bright
+    // EXACT colors from reference - muted soft tones
     const kimonoMaterial = new THREE.MeshStandardMaterial({
-        color: 0x4477aa, roughness: 0.7, metalness: 0.0
+        color: 0x5588aa, roughness: 0.8, metalness: 0.0
     });
     const kimonoDarkMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2a4a7a, roughness: 0.7, metalness: 0.0
+        color: 0x3a5a7a, roughness: 0.8, metalness: 0.0
     });
     const skinMaterial = new THREE.MeshStandardMaterial({
-        color: 0xe8c4a0, roughness: 0.7, metalness: 0
+        color: 0xd8b898, roughness: 0.8, metalness: 0
     });
     const beltMaterial = new THREE.MeshStandardMaterial({
-        color: 0x222222, roughness: 0.6, metalness: 0.0
+        color: 0x1a1a1a, roughness: 0.7, metalness: 0.0
     });
     const redMaterial = new THREE.MeshStandardMaterial({
-        color: 0x993333, roughness: 0.7, metalness: 0
+        color: 0x7a3535, roughness: 0.8, metalness: 0
     });
     const blueShoeMaterial = new THREE.MeshStandardMaterial({
-        color: 0x334466, roughness: 0.7, metalness: 0.0
+        color: 0x3a4a6a, roughness: 0.8, metalness: 0.0
     });
     const hairMaterial = new THREE.MeshStandardMaterial({
-        color: 0x222222, roughness: 0.6, metalness: 0.0
+        color: 0x1a1a1a, roughness: 0.7, metalness: 0.0
     });
     const collarMaterial = new THREE.MeshStandardMaterial({
-        color: 0xdddddd, roughness: 0.7, metalness: 0
+        color: 0xccccbb, roughness: 0.8, metalness: 0
     });
     const noseMaterial = new THREE.MeshStandardMaterial({
-        color: 0xd4a574, roughness: 0.7, metalness: 0
+        color: 0xc8a070, roughness: 0.8, metalness: 0
     });
 
-    // BODY - smooth rounded shape
-    const bodyGeo = new THREE.SphereGeometry(1.3, HP, HP);
+    // BODY - rounded box shape (not sphere) like reference
+    const bodyGeo = new THREE.CapsuleGeometry(1.1, 0.8, 8, HP);
     const body = new THREE.Mesh(bodyGeo, kimonoMaterial);
     body.scale.set(1.0, 1.1, 0.85);
     body.position.y = 1.9;
