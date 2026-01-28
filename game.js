@@ -782,22 +782,28 @@ function createFaceTexture() {
 
     const cx = size / 2;
     const cy = size / 2;
+    const faceRadius = 230;
 
-    // ===== SKIN BASE with circular mask =====
-    ctx.fillStyle = '#E8B080';
+    // ===== CLEAR CANVAS (transparent background) =====
+    ctx.clearRect(0, 0, size, size);
+
+    // ===== CLIP to circular region =====
+    ctx.save();
     ctx.beginPath();
-    ctx.arc(cx, cy, 245, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.arc(cx, cy, faceRadius, 0, Math.PI * 2);
+    ctx.clip();
+
+    // ===== SKIN BASE =====
+    ctx.fillStyle = '#E8B080';
+    ctx.fillRect(0, 0, size, size);
 
     // Subtle shading for 3D look
-    const gradient = ctx.createRadialGradient(cx - 40, cy - 60, 30, cx, cy, 250);
+    const gradient = ctx.createRadialGradient(cx - 40, cy - 60, 30, cx, cy, faceRadius);
     gradient.addColorStop(0, 'rgba(255, 225, 190, 0.4)');
     gradient.addColorStop(0.6, 'rgba(0, 0, 0, 0)');
-    gradient.addColorStop(1, 'rgba(150, 100, 60, 0.2)');
+    gradient.addColorStop(1, 'rgba(150, 100, 60, 0.25)');
     ctx.fillStyle = gradient;
-    ctx.beginPath();
-    ctx.arc(cx, cy, 245, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.fillRect(0, 0, size, size);
 
     // ===== EYEBROWS - Very thick, angular =====
     ctx.fillStyle = '#252525';
@@ -884,6 +890,9 @@ function createFaceTexture() {
     ctx.quadraticCurveTo(cx, 495, 342, 408);
     ctx.quadraticCurveTo(cx, 450, 170, 408);
     ctx.fill();
+
+    // Restore from circular clip
+    ctx.restore();
 
     const texture = new THREE.CanvasTexture(canvas);
     texture.needsUpdate = true;
@@ -1859,33 +1868,37 @@ function createPlayer() {
     head.scale.set(1, 0.9, 0.92);
     playerGroup.add(head);
 
-    // Face - curved plane that wraps around the front of the head
-    // Create a curved plane by bending a PlaneGeometry
-    const faceWidth = 2.6;
-    const faceHeight = 2.6;
-    const faceGeo = new THREE.PlaneGeometry(faceWidth, faceHeight, 16, 16);
+    // Face - curved plane that conforms to head sphere
+    const faceSize = 2.4;
+    const faceGeo = new THREE.PlaneGeometry(faceSize, faceSize, 24, 24);
 
-    // Curve the face plane to match head shape
+    // Curve the face to wrap around the head sphere
     const faceVerts = faceGeo.attributes.position;
+    const headR = 1.35;
     for (let i = 0; i < faceVerts.count; i++) {
         const x = faceVerts.getX(i);
         const y = faceVerts.getY(i);
-        // Curve based on distance from center
-        const distFromCenter = Math.sqrt(x * x + y * y);
-        const curveFactor = 0.15;
-        const z = Math.sqrt(Math.max(0, 1.6 * 1.6 - distFromCenter * distFromCenter * 0.5)) * curveFactor;
-        faceVerts.setZ(i, z);
+        const distSq = x * x + y * y;
+        // Spherical projection - push vertices onto sphere surface
+        if (distSq < headR * headR) {
+            const z = Math.sqrt(headR * headR - distSq) - headR + 0.12;
+            faceVerts.setZ(i, z);
+        } else {
+            // Outside sphere, push back and make transparent via alpha
+            faceVerts.setZ(i, -0.5);
+        }
     }
     faceGeo.computeVertexNormals();
 
     const faceTexture = createFaceTexture();
     const faceMat = new THREE.MeshBasicMaterial({
         map: faceTexture,
-        transparent: false,
-        side: THREE.FrontSide
+        transparent: true,
+        side: THREE.FrontSide,
+        depthWrite: false
     });
     const face = new THREE.Mesh(faceGeo, faceMat);
-    face.position.set(0, 3.55, 1.25);
+    face.position.set(0, 3.55, 1.35);
     playerGroup.add(face);
 
     // ========== 3D NOSE - Prominent ==========
@@ -3596,18 +3609,18 @@ function activateLeafForm() {
 }
 
 function updateLeafForm() {
-    // Move leaves with WASD
-    const moveSpeed = playerStats.speed * playerStats.speedMult * 1.2 * deltaTime;
+    // Move leaves with WASD or arrow keys
+    const moveSpeed = playerStats.speed * playerStats.speedMult * 1.5 * deltaTime;
     const moveDirection = new THREE.Vector3();
 
-    if (keys['w']) moveDirection.z -= 1;
-    if (keys['s']) moveDirection.z += 1;
-    if (keys['a']) moveDirection.x -= 1;
-    if (keys['d']) moveDirection.x += 1;
-    moveDirection.normalize();
-    
+    if (keys['w'] || keys['arrowup']) moveDirection.z -= 1;
+    if (keys['s'] || keys['arrowdown']) moveDirection.z += 1;
+    if (keys['a'] || keys['arrowleft']) moveDirection.x -= 1;
+    if (keys['d'] || keys['arrowright']) moveDirection.x += 1;
+
     // Move player position (invisible but still tracked)
-    if (moveDirection.length() > 0) {
+    if (moveDirection.lengthSq() > 0) {
+        moveDirection.normalize();
         player.position.x += moveDirection.x * moveSpeed;
         player.position.z += moveDirection.z * moveSpeed;
     }
