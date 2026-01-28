@@ -403,9 +403,9 @@ function init() {
     try {
         // Setup Three.js
         scene = new THREE.Scene();
-        // Blue sky - not too bright
-        scene.background = new THREE.Color(0x7ec8e3);
-        scene.fog = new THREE.Fog(0x9dd3e8, 80, 200);
+        // Soft blue sky like reference
+        scene.background = new THREE.Color(0x88aabb);
+        scene.fog = new THREE.Fog(0x99bbcc, 80, 200);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -416,7 +416,7 @@ function init() {
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.05;
-        renderer.setClearColor(0x87ceeb, 1);
+        renderer.setClearColor(0x88aabb, 1);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         clock = new THREE.Clock();
@@ -541,8 +541,8 @@ function createArena() {
     const arenaGroup = new THREE.Group();
     arenaGroup.name = 'arenaGroup';
 
-    // Green grass matching reference - not too bright
-    const grassColor = 0x4a9f4a;
+    // Green grass matching reference - natural, not neon
+    const grassColor = 0x5a8a4a;
 
     // Flat grass top - simple and clean
     const topGeo = new THREE.CircleGeometry(ARENA_RADIUS, 64);
@@ -602,8 +602,8 @@ function addBackgroundElements() {
     const backgroundGroup = new THREE.Group();
     backgroundGroup.name = 'backgroundGroup';
 
-    // Rolling green hills in background
-    const hillColor = 0x4a9a4a;
+    // Rolling green hills in background - muted
+    const hillColor = 0x4a7a4a;
     for (let i = 0; i < 6; i++) {
         const radius = 20 + Math.random() * 10;
         const hillGeo = new THREE.SphereGeometry(radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -659,37 +659,37 @@ function createPlayer() {
     const playerGroup = new THREE.Group();
     playerGroup.name = 'samuraiBob';
 
-    // LOW-POLY segments for faceted look
-    const HP = 32; // High poly for smooth look
-    const MP = 24; // Medium poly
+    // Poly counts
+    const HP = 24;
+    const MP = 16;
 
-    // Smooth materials matching reference image - Nintendo style
+    // Colors matching reference - muted, not too bright
     const kimonoMaterial = new THREE.MeshStandardMaterial({
-        color: 0x3b7dd8, roughness: 0.5, metalness: 0.0
+        color: 0x4477aa, roughness: 0.7, metalness: 0.0
     });
     const kimonoDarkMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2a5ba8, roughness: 0.5, metalness: 0.0
+        color: 0x2a4a7a, roughness: 0.7, metalness: 0.0
     });
     const skinMaterial = new THREE.MeshStandardMaterial({
-        color: 0xf5c9a6, roughness: 0.6, metalness: 0
+        color: 0xe8c4a0, roughness: 0.7, metalness: 0
     });
     const beltMaterial = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a, roughness: 0.4, metalness: 0.0
+        color: 0x222222, roughness: 0.6, metalness: 0.0
     });
     const redMaterial = new THREE.MeshStandardMaterial({
-        color: 0xc43838, roughness: 0.5, metalness: 0
+        color: 0x993333, roughness: 0.7, metalness: 0
     });
     const blueShoeMaterial = new THREE.MeshStandardMaterial({
-        color: 0x2850a0, roughness: 0.5, metalness: 0.0
+        color: 0x334466, roughness: 0.7, metalness: 0.0
     });
     const hairMaterial = new THREE.MeshStandardMaterial({
-        color: 0x1a1a1a, roughness: 0.4, metalness: 0.0
+        color: 0x222222, roughness: 0.6, metalness: 0.0
     });
     const collarMaterial = new THREE.MeshStandardMaterial({
-        color: 0xe8e8e8, roughness: 0.5, metalness: 0
+        color: 0xdddddd, roughness: 0.7, metalness: 0
     });
     const noseMaterial = new THREE.MeshStandardMaterial({
-        color: 0xdba070, roughness: 0.6, metalness: 0
+        color: 0xd4a574, roughness: 0.7, metalness: 0
     });
 
     // BODY - smooth rounded shape
@@ -839,25 +839,29 @@ function createPlayer() {
     rightFoot.castShadow = true;
     playerGroup.add(rightFoot);
 
-    // SWORD (on back) - smooth
+    // SWORD - bigger and more visible, held in right hand
     const swordGroup = new THREE.Group();
-    const bladeGeo = new THREE.BoxGeometry(0.06, 2.0, 0.12);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 0.6, roughness: 0.2 });
+    // Bigger blade
+    const bladeGeo = new THREE.BoxGeometry(0.12, 2.8, 0.25);
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.7, roughness: 0.3 });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
-    blade.position.y = 1.0;
+    blade.position.y = 1.4;
     swordGroup.add(blade);
-    const guardGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.06, HP);
-    const guardMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.6 });
+    // Guard
+    const guardGeo = new THREE.BoxGeometry(0.6, 0.12, 0.35, HP);
+    const guardMat = new THREE.MeshStandardMaterial({ color: 0x554433, roughness: 0.7 });
     const guard = new THREE.Mesh(guardGeo, guardMat);
-    guard.rotation.x = Math.PI / 2;
-    guard.position.y = 0.25;
+    guard.position.y = 0.15;
     swordGroup.add(guard);
-    const handleGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.5, HP);
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.7 });
+    // Handle
+    const handleGeo = new THREE.CylinderGeometry(0.12, 0.12, 0.7, 12);
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x332211, roughness: 0.8 });
     const handle = new THREE.Mesh(handleGeo, handleMat);
+    handle.position.y = -0.2;
     swordGroup.add(handle);
-    swordGroup.position.set(0, 1.7, -1.1);
-    swordGroup.rotation.x = -0.25;
+    // Position sword in right hand area
+    swordGroup.position.set(1.8, 2.0, 0.5);
+    swordGroup.rotation.z = -0.3;
     swordGroup.castShadow = true;
     playerGroup.add(swordGroup);
     playerGroup.userData.sword = swordGroup;
@@ -1278,21 +1282,45 @@ function updatePlayer() {
         player.rotation.y = Math.atan2(moveDirection.x, moveDirection.z);
     }
 
-    // Space bar = attack
+    // Space bar = attack (drops shield while attacking)
     if (keys[' '] && !playerStats.spacePressed && playerStats.attackCooldown <= 0) {
         playerStats.spacePressed = true;
+        playerStats.isAttackingNow = true;
         playerAttack();
+        // Shield drops during attack
+        setTimeout(() => { playerStats.isAttackingNow = false; }, 400);
     }
     if (!keys[' ']) playerStats.spacePressed = false;
 
-    // Shift = shield block
-    playerStats.isBlocking = keys['shift'];
+    // Shift = shield block (but not while attacking)
+    const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
+    playerStats.isBlocking = wantsBlock;
+
     if (player.userData.shield) {
         player.userData.shield.visible = true;
         if (playerStats.isBlocking) {
-            player.userData.shield.position.set(-0.8, 2.5, 1.8);
+            // Shield raised in front
+            player.userData.shield.position.set(-0.5, 2.2, 1.5);
+            player.userData.shield.rotation.y = 0;
         } else {
-            player.userData.shield.position.set(-1.8, 2.0, 1.2);
+            // Shield at side
+            player.userData.shield.position.set(-1.6, 1.5, 0.8);
+            player.userData.shield.rotation.y = 0.3;
+        }
+    }
+
+    // Animate sword during attack
+    if (player.userData.sword) {
+        if (playerStats.isAttackingNow) {
+            // Sword swings forward
+            player.userData.sword.position.set(1.2, 2.5, 1.5);
+            player.userData.sword.rotation.z = -1.2;
+            player.userData.sword.rotation.x = 0.3;
+        } else {
+            // Sword at rest
+            player.userData.sword.position.set(1.8, 2.0, 0.5);
+            player.userData.sword.rotation.z = -0.3;
+            player.userData.sword.rotation.x = 0;
         }
     }
 
