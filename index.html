@@ -302,7 +302,7 @@
             // Load game.js after Three.js is ready
             console.log('Loading game.js...');
             const script = document.createElement('script');
-            script.src = 'game.js';
+            script.src = 'game.js?v=' + Date.now();
             script.onload = function() {
                 console.log('game.js loaded successfully!');
                 // Wait a moment for functions to be defined
