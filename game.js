@@ -1268,14 +1268,14 @@ function updatePlayer() {
         return;
     }
 
-    // Simple instant movement
+    // Simple instant movement (WASD or Arrow keys)
     const moveSpeed = playerStats.speed * playerStats.speedMult * deltaTime;
     const moveDirection = new THREE.Vector3();
 
-    if (keys['w']) moveDirection.z -= 1;
-    if (keys['s']) moveDirection.z += 1;
-    if (keys['a']) moveDirection.x -= 1;
-    if (keys['d']) moveDirection.x += 1;
+    if (keys['w'] || keys['arrowup']) moveDirection.z -= 1;
+    if (keys['s'] || keys['arrowdown']) moveDirection.z += 1;
+    if (keys['a'] || keys['arrowleft']) moveDirection.x -= 1;
+    if (keys['d'] || keys['arrowright']) moveDirection.x += 1;
 
     if (moveDirection.lengthSq() > 0) {
         moveDirection.normalize();
@@ -1284,13 +1284,23 @@ function updatePlayer() {
         player.rotation.y = Math.atan2(moveDirection.x, moveDirection.z);
     }
 
-    // Simple jump
-    if (keys[' '] && playerStats.isGrounded && !playerStats.jumpPressed) {
-        playerStats.jumpPressed = true;
-        playerStats.velocity.y = playerStats.jumpPower;
-        playerStats.isGrounded = false;
+    // Space bar = attack
+    if (keys[' '] && !playerStats.spacePressed && playerStats.attackCooldown <= 0) {
+        playerStats.spacePressed = true;
+        playerAttack();
     }
-    if (!keys[' ']) playerStats.jumpPressed = false;
+    if (!keys[' ']) playerStats.spacePressed = false;
+
+    // Shift = shield block
+    playerStats.isBlocking = keys['shift'];
+    if (player.userData.shield) {
+        player.userData.shield.visible = true;
+        if (playerStats.isBlocking) {
+            player.userData.shield.position.set(-0.8, 2.5, 1.8);
+        } else {
+            player.userData.shield.position.set(-1.8, 2.0, 1.2);
+        }
+    }
 
     // Gravity
     playerStats.velocity.y -= 50 * deltaTime;
@@ -2071,6 +2081,9 @@ function playerAttack() {
         }, 200);
     }
 
+    // Create visible sword slash arc
+    createSwordSlash();
+
     // Attack hitbox (cone in front of player)
     const attackRange = 5;
     const attackAngle = Math.PI / 3; // 60 degree cone
@@ -2107,6 +2120,74 @@ function playerAttack() {
     setTimeout(() => {
         playerStats.isAttacking = false;
     }, 200);
+}
+
+function createSwordSlash() {
+    // Create a visible arc slash effect
+    const slashGroup = new THREE.Group();
+
+    // Arc geometry for the slash
+    const curve = new THREE.EllipseCurve(0, 0, 3, 3, 0, Math.PI * 0.7, false, 0);
+    const points = curve.getPoints(20);
+    const slashGeo = new THREE.BufferGeometry().setFromPoints(
+        points.map(p => new THREE.Vector3(p.x, 0, p.y))
+    );
+
+    // Create multiple lines for thickness
+    for (let i = 0; i < 3; i++) {
+        const mat = new THREE.LineBasicMaterial({
+            color: 0xffffff,
+            transparent: true,
+            opacity: 1 - i * 0.3,
+            linewidth: 3
+        });
+        const line = new THREE.Line(slashGeo, mat);
+        line.scale.setScalar(1 + i * 0.15);
+        slashGroup.add(line);
+    }
+
+    // Add a filled arc mesh for more visibility
+    const arcShape = new THREE.Shape();
+    arcShape.absarc(0, 0, 3.5, 0, Math.PI * 0.7, false);
+    arcShape.lineTo(0, 0);
+    const arcGeo = new THREE.ShapeGeometry(arcShape);
+    const arcMat = new THREE.MeshBasicMaterial({
+        color: 0x88ccff,
+        transparent: true,
+        opacity: 0.5,
+        side: THREE.DoubleSide
+    });
+    const arcMesh = new THREE.Mesh(arcGeo, arcMat);
+    arcMesh.rotation.x = -Math.PI / 2;
+    slashGroup.add(arcMesh);
+
+    // Position at player
+    slashGroup.position.copy(player.position);
+    slashGroup.position.y += 2;
+    slashGroup.rotation.y = player.rotation.y - Math.PI * 0.35;
+
+    scene.add(slashGroup);
+
+    // Animate and remove
+    let life = 0;
+    const animateSlash = () => {
+        life += 0.05;
+        slashGroup.scale.setScalar(1 + life * 0.5);
+        slashGroup.children.forEach(child => {
+            if (child.material) child.material.opacity *= 0.85;
+        });
+
+        if (life < 0.3) {
+            requestAnimationFrame(animateSlash);
+        } else {
+            scene.remove(slashGroup);
+            slashGroup.children.forEach(child => {
+                if (child.geometry) child.geometry.dispose();
+                if (child.material) child.material.dispose();
+            });
+        }
+    };
+    animateSlash();
 }
 
 function damageEnemy(enemy, damage) {
