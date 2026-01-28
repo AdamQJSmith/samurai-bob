@@ -713,6 +713,7 @@ let playerStats = {
     // Leaf form
     leafParticles: [],
     isLeafForm: false,
+    leafAttackQueued: false,
     // Dragon form
     isDragonForm: false,
     fireBreathCooldown: 0,
@@ -1316,9 +1317,9 @@ function setupCameraControls() {
     document.addEventListener('mousedown', (e) => {
         mouseDown[e.button] = true;
         if (gameState === 'playing' && e.button === 0) {
-            // In leaf form, clicking triggers the leaf solidify attack
+            // In leaf form, queue the attack to be processed in update loop
             if (playerStats.isLeafForm) {
-                solidifyFromLeaves();
+                playerStats.leafAttackQueued = true;
             } else {
                 playerAttack();
             }
@@ -2986,6 +2987,7 @@ function startGame() {
             // Leaf form
             leafParticles: [],
             isLeafForm: false,
+            leafAttackQueued: false,
             // Dragon form
             isDragonForm: false,
             fireBreathCooldown: 0,
@@ -3649,10 +3651,12 @@ function updateLeafForm() {
     
     // Invincible in leaf form - no damage taken
 
-    // Click or attack key to solidify and attack
-    if (playerStats.isAttacking || keys['j'] || mouseDown[0]) {
+    // Attack to solidify - check multiple triggers: J key, E key, Space, or mouse click
+    const attackPressed = keys['j'] || keys['e'] || keys[' '] || mouseDown[0] || playerStats.leafAttackQueued;
+    if (attackPressed) {
         solidifyFromLeaves();
-        mouseDown[0] = false; // Reset to prevent repeated triggers
+        mouseDown[0] = false;
+        playerStats.leafAttackQueued = false;
     }
 }
 
