@@ -281,33 +281,32 @@ body {
 /* Sound Button */
 .hud-bottom-right {
     position: absolute;
-    bottom: 100px;
-    right: 20px;
+    bottom: 20px;
+    left: 20px;
+    z-index: 1000;
 }
 
 .sound-btn {
     width: 50px;
     height: 50px;
     border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.4);
-    background: rgba(0,0,0,0.6);
+    border: 2px solid rgba(255,255,255,0.5);
+    background: rgba(0,0,0,0.7);
     font-size: 24px;
     cursor: pointer;
     transition: all 0.2s ease;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    color: white;
 }
 
 .sound-btn:hover {
-    background: rgba(0,0,0,0.8);
-    border-color: rgba(255,255,255,0.7);
+    background: rgba(0,0,0,0.9);
+    border-color: rgba(255,255,255,0.8);
     transform: scale(1.1);
 }
 
 .sound-btn.muted {
-    opacity: 0.6;
-    border-color: rgba(255,100,100,0.5);
+    opacity: 0.7;
+    border-color: rgba(255,100,100,0.6);
 }
 
 /* Ability HUD */

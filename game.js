@@ -1875,37 +1875,16 @@ function createPlayer() {
     head.scale.set(1, 0.9, 0.92);
     playerGroup.add(head);
 
-    // Face - curved plane that conforms to head sphere
-    const faceSize = 2.4;
-    const faceGeo = new THREE.PlaneGeometry(faceSize, faceSize, 24, 24);
-
-    // Curve the face to wrap around the head sphere
-    const faceVerts = faceGeo.attributes.position;
-    const headR = 1.35;
-    for (let i = 0; i < faceVerts.count; i++) {
-        const x = faceVerts.getX(i);
-        const y = faceVerts.getY(i);
-        const distSq = x * x + y * y;
-        // Spherical projection - push vertices onto sphere surface
-        if (distSq < headR * headR) {
-            const z = Math.sqrt(headR * headR - distSq) - headR + 0.12;
-            faceVerts.setZ(i, z);
-        } else {
-            // Outside sphere, push back and make transparent via alpha
-            faceVerts.setZ(i, -0.5);
-        }
-    }
-    faceGeo.computeVertexNormals();
-
+    // Face - simple plane with texture (circular via alpha)
+    const faceGeo = new THREE.PlaneGeometry(2.5, 2.5);
     const faceTexture = createFaceTexture();
     const faceMat = new THREE.MeshBasicMaterial({
         map: faceTexture,
         transparent: true,
-        side: THREE.FrontSide,
-        depthWrite: false
+        side: THREE.FrontSide
     });
     const face = new THREE.Mesh(faceGeo, faceMat);
-    face.position.set(0, 3.55, 1.35);
+    face.position.set(0, 3.55, 1.4);
     playerGroup.add(face);
 
     // ========== 3D NOSE - Prominent ==========
