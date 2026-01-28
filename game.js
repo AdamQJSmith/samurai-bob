@@ -1882,115 +1882,164 @@ function createPlayer() {
     rightFoot.scale.set(1.0, 0.4, 1.15);
     playerGroup.add(rightFoot);
 
-    // ========== HEAD with INTEGRATED FACE ==========
-    // Create head with face texture applied directly to front
+    // ========== HEAD - All 3D geometry, no textures ==========
     const headRadius = 1.5;
-    const headGeo = new THREE.SphereGeometry(headRadius, 32, 24);
-
-    // Create face texture
-    const faceTexture = createFaceTexture();
-
-    // Use shader material to blend face onto front of sphere
-    const headMat = new THREE.MeshStandardMaterial({
-        color: 0xE8B080,
-        roughness: 0.65,
-        flatShading: false
-    });
-
-    const head = new THREE.Mesh(headGeo, headMat);
+    const headGeo = new THREE.SphereGeometry(headRadius, 16, 12);
+    const head = new THREE.Mesh(headGeo, skin);
     head.position.y = 3.6;
     head.scale.set(1, 0.9, 0.92);
     playerGroup.add(head);
 
-    // Face - use a curved sphere segment that wraps around the head
-    // This creates a face that follows the head's curvature
-    const faceGeo = new THREE.SphereGeometry(
-        headRadius * 1.01,  // Slightly larger than head to sit on surface
-        32, 24,
-        -Math.PI * 0.38,    // Start angle (horizontal)
-        Math.PI * 0.76,     // Sweep angle (horizontal)
-        Math.PI * 0.22,     // Start angle (vertical)
-        Math.PI * 0.52      // Sweep angle (vertical)
-    );
-    const faceMat = new THREE.MeshBasicMaterial({
-        map: faceTexture,
-        transparent: true,
-        side: THREE.FrontSide,
-        depthWrite: false
-    });
-    const face = new THREE.Mesh(faceGeo, faceMat);
-    face.position.y = 3.6;
-    face.scale.set(1, 0.9, 0.92); // Match head scale
-    playerGroup.add(face);
+    // ========== 3D EYEBROWS - Thick angular wedges ==========
+    const browMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.8 });
 
-    // ========== 3D NOSE - Prominent ==========
-    const noseGeo = new THREE.SphereGeometry(0.4, 8, 6);
-    const noseMat = new THREE.MeshStandardMaterial({
-        color: 0xDDA875,
-        roughness: 0.55
-    });
+    // Left eyebrow - angled wedge
+    const leftBrowGeo = new THREE.BoxGeometry(0.7, 0.18, 0.25);
+    const leftBrow = new THREE.Mesh(leftBrowGeo, browMat);
+    leftBrow.position.set(-0.45, 3.95, 1.25);
+    leftBrow.rotation.z = 0.25;
+    leftBrow.rotation.y = -0.15;
+    playerGroup.add(leftBrow);
+
+    // Right eyebrow
+    const rightBrow = new THREE.Mesh(leftBrowGeo, browMat);
+    rightBrow.position.set(0.45, 3.95, 1.25);
+    rightBrow.rotation.z = -0.25;
+    rightBrow.rotation.y = 0.15;
+    playerGroup.add(rightBrow);
+
+    // ========== 3D EYES - Black ovals with white highlights ==========
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3 });
+    const eyeGeo = new THREE.SphereGeometry(0.18, 8, 8);
+
+    // Left eye
+    const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
+    leftEye.position.set(-0.45, 3.65, 1.35);
+    leftEye.scale.set(1, 1.3, 0.6);
+    playerGroup.add(leftEye);
+
+    // Right eye
+    const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
+    rightEye.position.set(0.45, 3.65, 1.35);
+    rightEye.scale.set(1, 1.3, 0.6);
+    playerGroup.add(rightEye);
+
+    // Eye highlights (white dots)
+    const highlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+    const highlightGeo = new THREE.SphereGeometry(0.06, 6, 6);
+
+    const leftHighlight = new THREE.Mesh(highlightGeo, highlightMat);
+    leftHighlight.position.set(-0.52, 3.72, 1.4);
+    playerGroup.add(leftHighlight);
+
+    const rightHighlight = new THREE.Mesh(highlightGeo, highlightMat);
+    rightHighlight.position.set(0.38, 3.72, 1.4);
+    playerGroup.add(rightHighlight);
+
+    // ========== 3D NOSE - Big and round like reference ==========
+    const noseGeo = new THREE.SphereGeometry(0.28, 8, 6);
+    const noseMat = new THREE.MeshStandardMaterial({ color: 0xDDA875, roughness: 0.55 });
     const nose = new THREE.Mesh(noseGeo, noseMat);
-    nose.position.set(0, 3.3, 1.6);
-    nose.scale.set(1.0, 0.72, 0.65);
+    nose.position.set(0, 3.4, 1.45);
+    nose.scale.set(1.2, 0.9, 0.8);
     playerGroup.add(nose);
 
+    // ========== 3D ROSY CHEEKS - Pink circles ==========
+    const cheekMat = new THREE.MeshStandardMaterial({ color: 0xE88888, roughness: 0.9 });
+    const cheekGeo = new THREE.SphereGeometry(0.2, 8, 8);
+
+    const leftCheek = new THREE.Mesh(cheekGeo, cheekMat);
+    leftCheek.position.set(-0.85, 3.4, 1.1);
+    leftCheek.scale.set(1, 0.8, 0.3);
+    playerGroup.add(leftCheek);
+
+    const rightCheek = new THREE.Mesh(cheekGeo, cheekMat);
+    rightCheek.position.set(0.85, 3.4, 1.1);
+    rightCheek.scale.set(1, 0.8, 0.3);
+    playerGroup.add(rightCheek);
+
+    // ========== 3D MUSTACHE - Curly and prominent ==========
+    const mustacheMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.8 });
+
+    // Center part of mustache
+    const mustacheCenterGeo = new THREE.SphereGeometry(0.25, 8, 6);
+    const mustacheCenter = new THREE.Mesh(mustacheCenterGeo, mustacheMat);
+    mustacheCenter.position.set(0, 3.15, 1.35);
+    mustacheCenter.scale.set(1.5, 0.6, 0.5);
+    playerGroup.add(mustacheCenter);
+
+    // Left curl
+    const curlGeo = new THREE.TorusGeometry(0.25, 0.08, 8, 12, Math.PI);
+    const leftCurl = new THREE.Mesh(curlGeo, mustacheMat);
+    leftCurl.position.set(-0.55, 3.12, 1.25);
+    leftCurl.rotation.z = Math.PI * 0.6;
+    leftCurl.rotation.y = -0.3;
+    playerGroup.add(leftCurl);
+
+    // Right curl
+    const rightCurl = new THREE.Mesh(curlGeo, mustacheMat);
+    rightCurl.position.set(0.55, 3.12, 1.25);
+    rightCurl.rotation.z = -Math.PI * 0.6;
+    rightCurl.rotation.y = 0.3;
+    playerGroup.add(rightCurl);
+
+    // ========== 3D MOUTH - Red smile ==========
+    const mouthMat = new THREE.MeshStandardMaterial({ color: 0xCC2828, roughness: 0.6 });
+    const mouthGeo = new THREE.SphereGeometry(0.2, 8, 8);
+    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
+    mouth.position.set(0, 2.95, 1.3);
+    mouth.scale.set(1.8, 0.6, 0.4);
+    playerGroup.add(mouth);
+
     // ========== EARS - Large, sticking out ==========
-    const earGeo = new THREE.SphereGeometry(0.4, 6, 5);
+    const earGeo = new THREE.SphereGeometry(0.35, 6, 5);
     const leftEar = new THREE.Mesh(earGeo, skin);
-    leftEar.position.set(-1.48, 3.55, 0);
-    leftEar.scale.set(0.25, 0.8, 0.5);
+    leftEar.position.set(-1.4, 3.55, 0.2);
+    leftEar.scale.set(0.3, 0.9, 0.6);
     playerGroup.add(leftEar);
     const rightEar = new THREE.Mesh(earGeo, skin);
-    rightEar.position.set(1.48, 3.55, 0);
-    rightEar.scale.set(0.25, 0.8, 0.5);
+    rightEar.position.set(1.4, 3.55, 0.2);
+    rightEar.scale.set(0.3, 0.9, 0.6);
     playerGroup.add(rightEar);
 
-    // ========== HAIR - Black cap with angular edges ==========
-    // Main hair cap - covers top half of head
-    const hairCapGeo = new THREE.SphereGeometry(1.55, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.5);
+    // ========== HAIR - Black with angular low-poly style ==========
+    // Main hair cap covering top/back of head
+    const hairCapGeo = new THREE.SphereGeometry(1.55, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.55);
     const hairCap = new THREE.Mesh(hairCapGeo, black);
-    hairCap.position.set(0, 3.9, -0.15);
-    hairCap.rotation.x = 0.1;
+    hairCap.position.set(0, 3.85, -0.1);
+    hairCap.rotation.x = 0.15;
     playerGroup.add(hairCap);
 
-    // Hair front edge - angular band
-    const hairFrontGeo = new THREE.BoxGeometry(2.2, 0.35, 0.6);
+    // Hair front edge - angular band across forehead
+    const hairFrontGeo = new THREE.BoxGeometry(2.4, 0.3, 0.5);
     const hairFront = new THREE.Mesh(hairFrontGeo, black);
-    hairFront.position.set(0, 4.55, 0.6);
-    hairFront.rotation.x = -0.25;
+    hairFront.position.set(0, 4.35, 0.7);
+    hairFront.rotation.x = -0.3;
     playerGroup.add(hairFront);
 
-    // Hair side pieces coming down
-    const hairSideGeo = new THREE.BoxGeometry(0.35, 0.8, 0.5);
+    // Side hair pieces
+    const hairSideGeo = new THREE.BoxGeometry(0.3, 0.6, 0.4);
     const hairL = new THREE.Mesh(hairSideGeo, black);
-    hairL.position.set(-1.1, 4.0, 0.2);
-    hairL.rotation.z = 0.12;
+    hairL.position.set(-1.2, 3.95, 0.4);
+    hairL.rotation.z = 0.15;
     playerGroup.add(hairL);
     const hairR = new THREE.Mesh(hairSideGeo, black);
-    hairR.position.set(1.1, 4.0, 0.2);
-    hairR.rotation.z = -0.12;
+    hairR.position.set(1.2, 3.95, 0.4);
+    hairR.rotation.z = -0.15;
     playerGroup.add(hairR);
 
-    // Hair back
-    const hairBackGeo = new THREE.SphereGeometry(1.45, 6, 5, 0, Math.PI * 2, 0, Math.PI * 0.55);
-    const hairBack = new THREE.Mesh(hairBackGeo, black);
-    hairBack.position.set(0, 3.75, -0.4);
-    hairBack.rotation.x = 0.15;
-    playerGroup.add(hairBack);
-
-    // ========== TOPKNOT - Iconic samurai feature ==========
-    // Cylindrical base
-    const knotBaseGeo = new THREE.CylinderGeometry(0.2, 0.28, 0.55, 6);
+    // ========== TOPKNOT - Prominent bun like reference ==========
+    // Cylindrical neck/base of topknot
+    const knotBaseGeo = new THREE.CylinderGeometry(0.18, 0.25, 0.4, 6);
     const knotBase = new THREE.Mesh(knotBaseGeo, black);
-    knotBase.position.set(0, 5.15, -0.15);
+    knotBase.position.set(0, 5.0, -0.1);
     playerGroup.add(knotBase);
 
-    // Top bun - faceted
-    const knotTopGeo = new THREE.OctahedronGeometry(0.38, 0);
+    // Top bun - chunky angular shape
+    const knotTopGeo = new THREE.DodecahedronGeometry(0.35, 0);
     const knotTop = new THREE.Mesh(knotTopGeo, black);
-    knotTop.position.set(0, 5.55, -0.15);
-    knotTop.scale.set(1.1, 0.65, 1.1);
-    knotTop.rotation.y = Math.PI / 4;
+    knotTop.position.set(0, 5.35, -0.1);
+    knotTop.scale.set(1.2, 0.8, 1.2);
     playerGroup.add(knotTop);
 
     scene.add(playerGroup);
