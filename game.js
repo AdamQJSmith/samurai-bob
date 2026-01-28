@@ -212,9 +212,11 @@ function initAudioSystem() {
         audioContext = new (window.AudioContext || window.webkitAudioContext)();
         audioManager = {
             masterVolume: 0.5,
+            muted: false,
             sounds: {},
 
             play: function(soundName, volume = 1.0) {
+                if (this.muted) return;
                 if (!audioContext || audioContext.state === 'suspended') {
                     audioContext.resume();
                 }
@@ -223,6 +225,11 @@ function initAudioSystem() {
                 if (sound) {
                     sound(volume * this.masterVolume);
                 }
+            },
+
+            toggleMute: function() {
+                this.muted = !this.muted;
+                return this.muted;
             },
 
             // Synthesized sound generators
@@ -4261,9 +4268,9 @@ function updatePowerUps() {
             powerUp.children[0].rotation.z = Math.sin(gameTimer * 2) * 0.15;
         }
 
-        // Check player collision
+        // Check player collision (generous pickup radius)
         const dist = player.position.distanceTo(powerUp.position);
-        if (dist < 2.5) {
+        if (dist < 5.0) {
             // Collect power-up
             activateAbility(powerUp.userData.type);
             scene.remove(powerUp);
@@ -5272,6 +5279,19 @@ function gameOver() {
         document.exitPointerLock();
     }
 }
+
+// Global sound toggle function (called by UI button)
+function toggleSound() {
+    if (audioManager) {
+        const muted = audioManager.toggleMute();
+        const btn = document.getElementById('sound-toggle');
+        if (btn) {
+            btn.textContent = muted ? '🔇' : '🔊';
+            btn.classList.toggle('muted', muted);
+        }
+    }
+}
+window.toggleSound = toggleSound;
 
 // Ensure startGame is always on window (even if there were errors)
 if (typeof startGame !== 'undefined') {
