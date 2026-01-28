@@ -908,12 +908,14 @@ function createPlayer() {
     const rightArmGroup = new THREE.Group();
     rightArmGroup.position.set(1.1, 2.2, 0); // Pivot at shoulder
 
-    const rightArm = new THREE.Mesh(armGeo, kimonoBlue);
+    const rightArmGeo = new THREE.CylinderGeometry(0.28, 0.32, 1.0, 12);
+    const rightArm = new THREE.Mesh(rightArmGeo, kimonoBlue);
     rightArm.position.set(0.4, -0.3, 0.1);
     rightArm.rotation.z = -Math.PI / 3;
     rightArmGroup.add(rightArm);
 
-    const rightHand = new THREE.Mesh(handGeo, skin);
+    const rightHandGeo = new THREE.SphereGeometry(0.25, 10, 10);
+    const rightHand = new THREE.Mesh(rightHandGeo, skin);
     rightHand.position.set(0.8, -0.5, 0.2);
     rightArmGroup.add(rightHand);
 
