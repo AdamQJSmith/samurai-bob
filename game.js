@@ -5498,9 +5498,19 @@ function gameOver() {
 }
 
 // Global sound toggle function (called by UI button)
+let lastSoundToggle = 0;
 function toggleSound() {
+    // Debounce - prevent rapid toggles (must wait 300ms between toggles)
+    const now = Date.now();
+    if (now - lastSoundToggle < 300) {
+        console.log('Sound toggle debounced');
+        return;
+    }
+    lastSoundToggle = now;
+
     if (audioManager) {
         const muted = audioManager.toggleMute();
+        console.log('Sound toggled, muted:', muted);
         const btn = document.getElementById('sound-toggle');
         if (btn) {
             btn.textContent = muted ? '🔇' : '🔊';
