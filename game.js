@@ -867,25 +867,59 @@ function createPlayer() {
     belt.position.y = 1.15;
     playerGroup.add(belt);
 
-    // === ARMS - stubby cylinders at angles ===
-    const armGeo = new THREE.CylinderGeometry(0.28, 0.32, 0.9, 12);
-    const leftArm = new THREE.Mesh(armGeo, kimonoBlue);
-    leftArm.position.set(-1.5, 1.9, 0.2);
-    leftArm.rotation.z = Math.PI / 2.5;
-    playerGroup.add(leftArm);
-    const rightArm = new THREE.Mesh(armGeo, kimonoBlue);
-    rightArm.position.set(1.5, 1.9, 0.2);
-    rightArm.rotation.z = -Math.PI / 2.5;
-    playerGroup.add(rightArm);
+    // === LEFT ARM GROUP (holds shield) ===
+    const leftArmGroup = new THREE.Group();
+    leftArmGroup.position.set(-1.1, 2.2, 0); // Pivot at shoulder
 
-    // Hands
+    const armGeo = new THREE.CylinderGeometry(0.28, 0.32, 1.0, 12);
+    const leftArm = new THREE.Mesh(armGeo, kimonoBlue);
+    leftArm.position.set(-0.4, -0.3, 0.1);
+    leftArm.rotation.z = Math.PI / 3;
+    leftArmGroup.add(leftArm);
+
     const handGeo = new THREE.SphereGeometry(0.25, 10, 10);
     const leftHand = new THREE.Mesh(handGeo, skin);
-    leftHand.position.set(-1.9, 1.5, 0.3);
-    playerGroup.add(leftHand);
+    leftHand.position.set(-0.8, -0.5, 0.2);
+    leftArmGroup.add(leftHand);
+
+    playerGroup.add(leftArmGroup);
+    playerGroup.userData.leftArm = leftArmGroup;
+
+    // === RIGHT ARM GROUP (holds sword) ===
+    const rightArmGroup = new THREE.Group();
+    rightArmGroup.position.set(1.1, 2.2, 0); // Pivot at shoulder
+
+    const rightArm = new THREE.Mesh(armGeo, kimonoBlue);
+    rightArm.position.set(0.4, -0.3, 0.1);
+    rightArm.rotation.z = -Math.PI / 3;
+    rightArmGroup.add(rightArm);
+
     const rightHand = new THREE.Mesh(handGeo, skin);
-    rightHand.position.set(1.9, 1.5, 0.3);
-    playerGroup.add(rightHand);
+    rightHand.position.set(0.8, -0.5, 0.2);
+    rightArmGroup.add(rightHand);
+
+    // Sword attached to right arm
+    const swordGroup = new THREE.Group();
+    const bladeGeo = new THREE.BoxGeometry(0.12, 2.5, 0.08);
+    const blade = new THREE.Mesh(bladeGeo, new THREE.MeshStandardMaterial({ color: 0xcccccc, metalness: 0.6, roughness: 0.3 }));
+    blade.position.y = 1.25;
+    swordGroup.add(blade);
+    const guardGeo = new THREE.BoxGeometry(0.6, 0.12, 0.2);
+    const guard = new THREE.Mesh(guardGeo, new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 0.8 }));
+    guard.position.y = 0.1;
+    swordGroup.add(guard);
+    const handleGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.6, 8);
+    const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 }));
+    handle.position.y = -0.25;
+    swordGroup.add(handle);
+
+    swordGroup.position.set(0.8, -0.6, 0.3);
+    swordGroup.rotation.z = 0.3;
+    rightArmGroup.add(swordGroup);
+
+    playerGroup.add(rightArmGroup);
+    playerGroup.userData.rightArm = rightArmGroup;
+    playerGroup.userData.sword = swordGroup;
 
     // === LEGS - short red cylinders ===
     const legGeo = new THREE.CylinderGeometry(0.32, 0.35, 0.8, 12);
@@ -970,7 +1004,7 @@ function createPlayer() {
     knotTop.scale.set(1.1, 0.7, 1.1);
     playerGroup.add(knotTop);
 
-    // === SHIELD - wooden with flower ===
+    // === SHIELD attached to left arm ===
     const shieldGroup = new THREE.Group();
     const rimGeo = new THREE.TorusGeometry(0.85, 0.1, 12, 32);
     const rim = new THREE.Mesh(rimGeo, metal);
@@ -982,29 +1016,10 @@ function createPlayer() {
     }));
     shieldFace.position.z = 0.03;
     shieldGroup.add(shieldFace);
-    shieldGroup.position.set(-1.9, 1.3, 0.6);
-    shieldGroup.rotation.y = 0.4;
-    playerGroup.add(shieldGroup);
+    shieldGroup.position.set(-0.9, -0.6, 0.5);
+    shieldGroup.rotation.y = 0.3;
+    leftArmGroup.add(shieldGroup);
     playerGroup.userData.shield = shieldGroup;
-
-    // === SWORD ===
-    const swordGroup = new THREE.Group();
-    const bladeGeo = new THREE.BoxGeometry(0.1, 2.2, 0.2);
-    const blade = new THREE.Mesh(bladeGeo, new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.5, roughness: 0.4 }));
-    blade.position.y = 1.1;
-    swordGroup.add(blade);
-    const guardGeo = new THREE.BoxGeometry(0.5, 0.1, 0.3);
-    const guard = new THREE.Mesh(guardGeo, new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 0.8 }));
-    guard.position.y = 0.1;
-    swordGroup.add(guard);
-    const handleGeo = new THREE.CylinderGeometry(0.08, 0.08, 0.5, 8);
-    const handle = new THREE.Mesh(handleGeo, new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 }));
-    handle.position.y = -0.2;
-    swordGroup.add(handle);
-    swordGroup.position.set(1.9, 1.8, 0.4);
-    swordGroup.rotation.z = -0.4;
-    playerGroup.add(swordGroup);
-    playerGroup.userData.sword = swordGroup;
 
     scene.add(playerGroup);
     return playerGroup;
@@ -1020,15 +1035,15 @@ function createEnemy(type = 'grunt') {
         case 'grunt':
             color = 0xe74c3c;
             size = 1.2;
-            health = 50;
+            health = 30;  // Reduced - dies in 1-2 hits
             speed = 2;
-            damage = 10;
+            damage = 8;
             points = 50;
             break;
         case 'speedy':
             color = 0x3498db;
             size = 1;
-            health = 30;
+            health = 20;  // Reduced - dies in 1 hit
             speed = 4.5;
             damage = 5;
             points = 75;
@@ -1036,17 +1051,17 @@ function createEnemy(type = 'grunt') {
         case 'tank':
             color = 0x95a5a6;
             size = 2;
-            health = 120;
+            health = 60;  // Reduced - dies in 2-3 hits
             speed = 1.2;
-            damage = 20;
+            damage = 15;
             points = 150;
             break;
         case 'boss':
             color = 0xc0392b;
             size = 2.5;
-            health = 200;
+            health = 100;  // Reduced - dies in 3-4 hits
             speed = 2;
-            damage = 30;
+            damage = 20;
             points = 500;
             break;
     }
@@ -1387,41 +1402,47 @@ function updatePlayer() {
     if (keys[' '] && !playerStats.spacePressed && playerStats.attackCooldown <= 0) {
         playerStats.spacePressed = true;
         playerStats.isAttackingNow = true;
+        playerStats.attackAnimTime = 0;
         playerAttack();
-        // Shield drops during attack
+        // Attack animation lasts 400ms
         setTimeout(() => { playerStats.isAttackingNow = false; }, 400);
     }
     if (!keys[' ']) playerStats.spacePressed = false;
+
+    // Track attack animation time
+    if (playerStats.isAttackingNow) {
+        playerStats.attackAnimTime = (playerStats.attackAnimTime || 0) + deltaTime;
+    }
 
     // Shift = shield block (but not while attacking)
     const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
     playerStats.isBlocking = wantsBlock;
 
-    if (player.userData.shield) {
-        player.userData.shield.visible = true;
+    // === ANIMATE LEFT ARM (shield arm) ===
+    if (player.userData.leftArm) {
         if (playerStats.isBlocking) {
-            // Shield raised in front
-            player.userData.shield.position.set(-0.5, 2.2, 1.5);
-            player.userData.shield.rotation.y = 0;
+            // Raise left arm with shield in front
+            player.userData.leftArm.rotation.x = -0.8;
+            player.userData.leftArm.rotation.z = 0.5;
         } else {
-            // Shield at side
-            player.userData.shield.position.set(-1.6, 1.5, 0.8);
-            player.userData.shield.rotation.y = 0.3;
+            // Relaxed position
+            player.userData.leftArm.rotation.x = 0;
+            player.userData.leftArm.rotation.z = 0;
         }
     }
 
-    // Animate sword during attack
-    if (player.userData.sword) {
+    // === ANIMATE RIGHT ARM (sword arm) ===
+    if (player.userData.rightArm) {
         if (playerStats.isAttackingNow) {
-            // Sword swings forward
-            player.userData.sword.position.set(1.2, 2.5, 1.5);
-            player.userData.sword.rotation.z = -1.2;
-            player.userData.sword.rotation.x = 0.3;
+            // Swing sword arm forward in an arc
+            const t = (playerStats.attackAnimTime || 0) / 0.4; // 0 to 1 over 400ms
+            const swingAngle = Math.sin(t * Math.PI) * 1.8; // Arc swing
+            player.userData.rightArm.rotation.x = -swingAngle;
+            player.userData.rightArm.rotation.z = -0.3 - swingAngle * 0.3;
         } else {
-            // Sword at rest
-            player.userData.sword.position.set(1.8, 2.0, 0.5);
-            player.userData.sword.rotation.z = -0.3;
-            player.userData.sword.rotation.x = 0;
+            // Relaxed position - arm slightly raised with sword
+            player.userData.rightArm.rotation.x = -0.2;
+            player.userData.rightArm.rotation.z = 0;
         }
     }
 
@@ -2111,39 +2132,55 @@ function updatePowerUps() {
 }
 
 function updateEnemies() {
-    enemies.forEach((enemy, index) => {
+    // Iterate backwards to safely remove enemies
+    for (let i = enemies.length - 1; i >= 0; i--) {
+        const enemy = enemies[i];
+
+        // Check if enemy is dead FIRST
+        if (enemy.userData.health <= 0) {
+            killEnemy(enemy, i);
+            continue;
+        }
+
         // Decrease stun timer
         if (enemy.userData.stunned > 0) {
             enemy.userData.stunned -= deltaTime;
-            return; // Don't move while stunned
+            continue; // Don't move while stunned
         }
 
         // Move towards player
         const direction = new THREE.Vector3();
         direction.subVectors(player.position, enemy.position);
         direction.y = 0;
+        const distToPlayer = direction.length();
         direction.normalize();
 
         const speed = enemy.userData.speed * (1 + gameTimer * 0.005) * deltaTime;
-        enemy.position.add(direction.multiplyScalar(speed));
+
+        // Only move if not too close (prevents sticking)
+        if (distToPlayer > 2.0) {
+            enemy.position.add(direction.clone().multiplyScalar(speed));
+        }
 
         // Rotate to face player
         const angle = Math.atan2(direction.x, direction.z);
         enemy.rotation.y = angle + Math.PI;
 
-        // Check collision with player
-        const distance = player.position.distanceTo(enemy.position);
-        if (distance < 2.5) {
+        // Check collision with player - only damage on contact
+        if (distToPlayer < 2.0) {
             if (!playerStats.isBlocking) {
                 // Damage player
-                playerStats.health -= enemy.userData.damage * deltaTime;
-                
-                // Knockback
-                const knockback = direction.multiplyScalar(-3);
-                player.position.add(knockback);
+                playerStats.health -= enemy.userData.damage * deltaTime * 0.5;
+
+                // Push enemy back slightly to prevent sticking
+                const pushBack = direction.clone().multiplyScalar(-0.1);
+                enemy.position.add(pushBack);
             } else {
                 // Shield blocks and damages enemy
-                damageEnemy(enemy, 10 * playerStats.powerMult * deltaTime);
+                damageEnemy(enemy, 15 * playerStats.powerMult * deltaTime);
+                // Push enemy back when blocked
+                const pushBack = direction.clone().multiplyScalar(-0.2);
+                enemy.position.add(pushBack);
             }
         }
 
@@ -2155,12 +2192,7 @@ function updateEnemies() {
             enemy.position.x = enemyPos2D.x;
             enemy.position.z = enemyPos2D.y;
         }
-
-        // Check if enemy is dead
-        if (enemy.userData.health <= 0) {
-            killEnemy(enemy, index);
-        }
-    });
+    }
 }
 
 function spawnEnemies() {
@@ -2207,9 +2239,9 @@ function playerAttack() {
     // Create visible sword slash arc
     createSwordSlash();
 
-    // Attack hitbox (cone in front of player)
-    const attackRange = 5;
-    const attackAngle = Math.PI / 3; // 60 degree cone
+    // Attack hitbox (wider cone in front of player)
+    const attackRange = 6;
+    const attackAngle = Math.PI / 2; // 90 degree cone - wider swing
 
     enemies.forEach(enemy => {
         const toEnemy = new THREE.Vector3();
@@ -2223,16 +2255,16 @@ function playerAttack() {
             const dot = forward.dot(toEnemy);
 
             if (dot > Math.cos(attackAngle / 2)) {
-                // Hit!
-                const damage = 25 * playerStats.powerMult;
+                // Hit! - Increased damage
+                const damage = 35 * playerStats.powerMult;
                 damageEnemy(enemy, damage);
 
-                // Knockback
-                const knockback = toEnemy.multiplyScalar(8);
+                // Strong knockback
+                const knockback = toEnemy.clone().multiplyScalar(10);
                 enemy.position.add(knockback);
 
-                // Stun
-                enemy.userData.stunned = 1.0;
+                // Longer stun
+                enemy.userData.stunned = 1.5;
 
                 // Create hit particles
                 createHitParticles(enemy.position);
