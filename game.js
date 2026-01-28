@@ -513,79 +513,18 @@ function init() {
     window.addEventListener('resize', onWindowResize);
 }
 
-// ===== WOW CAMERA CONTROLS =====
-let cameraYaw = 0;
-let cameraPitch = 0.2;
-let cameraDist = 14;
-let cameraLocked = false;
-let leftMouseDown = false;
-let rightMouseDown = false;
-let isOrbiting = false;
-
+// ===== FIXED CAMERA =====
 function setupCameraControls() {
     const canvas = renderer.domElement;
-    
+
+    // Simple: left click = attack
     canvas.addEventListener('mousedown', (e) => {
-        if (e.button === 0) leftMouseDown = true;
-        if (e.button === 2) rightMouseDown = true;
-        
-        const both = leftMouseDown && rightMouseDown;
-        if (both && !isOrbiting && !cameraLocked) {
-            canvas.requestPointerLock?.();
-            isOrbiting = true;
-            return;
-        }
-        
-        // Single button actions when NOT orbiting
-        if (!isOrbiting && gameState === 'playing') {
-            if (e.button === 0) playerAttack();
-            if (e.button === 2) playerStats.isBlocking = true;
+        if (gameState === 'playing' && e.button === 0) {
+            playerAttack();
         }
     });
-    
-    window.addEventListener('mouseup', (e) => {
-        if (e.button === 0) leftMouseDown = false;
-        if (e.button === 2) {
-            rightMouseDown = false;
-            playerStats.isBlocking = false;
-        }
-        
-        if (!(leftMouseDown && rightMouseDown) && isOrbiting) {
-            document.exitPointerLock?.();
-            isOrbiting = false;
-        }
-    });
-    
-    window.addEventListener('mousemove', (e) => {
-        if (isOrbiting && !cameraLocked) {
-            const dx = e.movementX ?? 0;
-            const dy = e.movementY ?? 0;
-            cameraYaw -= dx * 0.0025;
-            cameraPitch -= dy * 0.0025;
-            cameraPitch = Math.max(-0.26, Math.min(0.78, cameraPitch));
-        }
-    });
-    
-    canvas.addEventListener('wheel', (e) => {
-        if (!cameraLocked) {
-            const delta = Math.sign(e.deltaY) * Math.min(Math.abs(e.deltaY), 200);
-            cameraDist += delta * 0.0015;
-            cameraDist = Math.max(6, Math.min(25, cameraDist));
-        }
-    }, { passive: true });
-    
-    // Camera lock setting
-    const lockCheckbox = document.getElementById('lock-camera');
-    if (lockCheckbox) {
-        const saved = localStorage.getItem('lockCamera') === 'true';
-        lockCheckbox.checked = saved;
-        cameraLocked = saved;
-        lockCheckbox.addEventListener('change', (e) => {
-            cameraLocked = e.target.checked;
-            localStorage.setItem('lockCamera', cameraLocked ? 'true' : 'false');
-            if (cameraLocked) document.exitPointerLock?.();
-        });
-    }
+
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
 function onWindowResize() {
@@ -1329,11 +1268,8 @@ function updatePlayer() {
         return;
     }
 
-    // Movement speed (wind form gives speed boost)
-    let speedMult = playerStats.speedMult;
-    if (playerStats.isWindForm) speedMult *= 1.3;
-    
-    const moveSpeed = playerStats.speed * speedMult * deltaTime;
+    // Simple instant movement
+    const moveSpeed = playerStats.speed * playerStats.speedMult * deltaTime;
     const moveDirection = new THREE.Vector3();
 
     if (keys['w']) moveDirection.z -= 1;
@@ -1341,110 +1277,29 @@ function updatePlayer() {
     if (keys['a']) moveDirection.x -= 1;
     if (keys['d']) moveDirection.x += 1;
 
-    moveDirection.normalize();
-    const isMoving = moveDirection.length() > 0;
-
-    if (isMoving && !playerStats.isGroundPounding) {
+    if (moveDirection.lengthSq() > 0) {
+        moveDirection.normalize();
         player.position.x += moveDirection.x * moveSpeed;
         player.position.z += moveDirection.z * moveSpeed;
-
-        // Rotate player to face movement direction
-        const angle = Math.atan2(moveDirection.x, moveDirection.z);
-        player.rotation.y = angle;
+        player.rotation.y = Math.atan2(moveDirection.x, moveDirection.z);
     }
 
-    // === MARIO-STYLE TRIPLE JUMP ===
-    const now = gameTimer;
-    const timeSinceLastJump = now - playerStats.lastJumpTime;
-    
-    // Reset jump count if too much time passed or not moving
-    if (timeSinceLastJump > playerStats.jumpComboWindow || !isMoving) {
-        if (playerStats.isGrounded) {
-            playerStats.jumpCount = 0;
-        }
-    }
-
-    // Jump input (space key, only trigger once per press)
+    // Simple jump
     if (keys[' '] && playerStats.isGrounded && !playerStats.jumpPressed) {
         playerStats.jumpPressed = true;
-        
-        // Calculate jump power based on combo
-        let jumpPower = playerStats.jumpPower;
-        
-        // Wind form gives higher jumps
-        if (playerStats.isWindForm) jumpPower *= 1.5;
-        
-        if (isMoving && timeSinceLastJump < playerStats.jumpComboWindow) {
-            playerStats.jumpCount++;
-            if (playerStats.jumpCount >= 3) {
-                // TRIPLE JUMP - much higher!
-                jumpPower *= 1.8;
-                playerStats.jumpCount = 0;
-                createJumpParticles(player.position, 0xffff00); // Yellow particles
-            } else if (playerStats.jumpCount === 2) {
-                // Double jump - slightly higher
-                jumpPower *= 1.3;
-                createJumpParticles(player.position, 0x88ff88); // Green particles
-            }
-        } else {
-            playerStats.jumpCount = 1;
-        }
-        
-        playerStats.velocity.y = jumpPower;
+        playerStats.velocity.y = playerStats.jumpPower;
         playerStats.isGrounded = false;
-        playerStats.isJumping = true;
-        playerStats.lastJumpTime = now;
-        
-        createJumpParticles(player.position, 0xffffff);
     }
-    
-    if (!keys[' ']) {
-        playerStats.jumpPressed = false;
-    }
+    if (!keys[' ']) playerStats.jumpPressed = false;
 
-    // === GROUND POUND ===
-    // Press S or Shift while in air to ground pound
-    if (!playerStats.isGrounded && !playerStats.isGroundPounding) {
-        if (keys['s'] || keys['shift']) {
-            playerStats.isGroundPounding = true;
-            playerStats.velocity.y = -playerStats.groundPoundSpeed;
-            // Cancel horizontal momentum
-            playerStats.velocity.x = 0;
-            playerStats.velocity.z = 0;
-        }
-    }
-
-    // Apply gravity (stronger when falling for snappier feel)
-    const gravity = playerStats.velocity.y > 0 ? 45 : 60;
-    if (!playerStats.isGroundPounding) {
-        playerStats.velocity.y -= gravity * deltaTime;
-    }
+    // Gravity
+    playerStats.velocity.y -= 50 * deltaTime;
     player.position.y += playerStats.velocity.y * deltaTime;
 
     // Ground check
     if (player.position.y <= 0) {
         player.position.y = 0;
-        
-        // Ground pound landing effect
-        if (playerStats.isGroundPounding) {
-            createGroundPoundEffect(player.position);
-            // Damage nearby enemies
-            enemies.forEach(enemy => {
-                const dist = player.position.distanceTo(enemy.position);
-                if (dist < 6) {
-                    const damage = 40 * playerStats.powerMult;
-                    damageEnemy(enemy, damage);
-                    // Knockback
-                    const knockDir = new THREE.Vector3().subVectors(enemy.position, player.position).normalize();
-                    enemy.position.add(knockDir.multiplyScalar(5));
-                    enemy.userData.stunned = 1.5;
-                }
-            });
-            playerStats.isGroundPounding = false;
-        }
-        
         playerStats.velocity.y = 0;
-        playerStats.isJumping = false;
         playerStats.isGrounded = true;
     }
 
@@ -1457,49 +1312,17 @@ function updatePlayer() {
         player.position.z = pos2D.y;
     }
 
-    // Update shield position (raised when blocking)
-    if (player.userData.shield) {
-        if (playerStats.isBlocking && !playerStats.isDragonForm) {
-            // Raise shield in front for blocking
-            player.userData.shield.position.lerp(new THREE.Vector3(-0.8, 2.5, 1.8), 0.2);
-            player.userData.shield.rotation.y = 0;
-        } else {
-            // Normal position (held at side like reference)
-            player.userData.shield.position.lerp(new THREE.Vector3(-1.8, 2.0, 1.2), 0.2);
-            player.userData.shield.rotation.y = 0.3;
-        }
-        // Shield always visible (unless in dragon form)
-        player.userData.shield.visible = !playerStats.isDragonForm;
-    }
-    
-    // Dragon form: enemies die on touch
-    if (playerStats.isDragonForm) {
-        enemies.forEach(enemy => {
-            const dist = player.position.distanceTo(enemy.position);
-            if (dist < 3) {
-                damageEnemy(enemy, 100 * playerStats.powerMult);
-                createFireParticles(enemy.position);
-            }
-        });
-    }
-
-    // WoW-style camera update
+    // Update camera
     updateCamera();
 }
 
 function updateCamera() {
     if (!player) return;
-    
-    // Spherical coordinates with separate eye height
-    const eyeHeight = 1.35;
-    const base = player.position.clone().add(new THREE.Vector3(0, eyeHeight, 0));
-    
-    const q = new THREE.Quaternion().setFromEuler(new THREE.Euler(cameraPitch, cameraYaw, 0, 'YXZ'));
-    const offset = new THREE.Vector3(0, 0, cameraDist).applyQuaternion(q);
-    const desired = base.add(offset);
-    
-    camera.position.lerp(desired, 0.12);
-    camera.lookAt(player.position.clone().add(new THREE.Vector3(0, eyeHeight - 0.45, 0)));
+
+    // Fixed camera behind and above player - instant follow
+    const offset = new THREE.Vector3(0, 12, 16);
+    camera.position.copy(player.position).add(offset);
+    camera.lookAt(player.position);
 }
 
 // ===== JUMP AND GROUND POUND PARTICLES =====
