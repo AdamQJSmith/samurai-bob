@@ -867,37 +867,31 @@ function createPlayer() {
     belt.position.y = 1.15;
     playerGroup.add(belt);
 
-    // === LEFT ARM - Simple bent arm that swings to block ===
+    // === LEFT ARM - arm parts stored separately for animation ===
     const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(-1.0, 2.0, 0.2); // Shoulder position
+    leftArmGroup.position.set(-1.0, 2.0, 0.2); // Shoulder position (stays fixed)
 
-    // Upper arm - angled down and slightly forward
+    // Upper arm
     const upperArmGeo = new THREE.CylinderGeometry(0.25, 0.22, 1.0, 12);
     const leftUpperArm = new THREE.Mesh(upperArmGeo, kimonoBlue);
-    leftUpperArm.position.set(0, -0.4, 0.2);
-    leftUpperArm.rotation.x = 0.3;
     leftArmGroup.add(leftUpperArm);
 
     // Elbow
     const elbowGeo = new THREE.SphereGeometry(0.2, 10, 10);
     const leftElbow = new THREE.Mesh(elbowGeo, kimonoBlue);
-    leftElbow.position.set(0, -0.85, 0.45);
     leftArmGroup.add(leftElbow);
 
-    // Forearm - angled forward from elbow
+    // Forearm
     const forearmGeo = new THREE.CylinderGeometry(0.2, 0.18, 0.9, 12);
     const leftForearm = new THREE.Mesh(forearmGeo, kimonoBlue);
-    leftForearm.position.set(0, -0.9, 1.0);
-    leftForearm.rotation.x = 1.2;
     leftArmGroup.add(leftForearm);
 
     // Hand
     const handGeo = new THREE.SphereGeometry(0.2, 10, 10);
     const leftHand = new THREE.Mesh(handGeo, skin);
-    leftHand.position.set(0, -0.7, 1.5);
     leftArmGroup.add(leftHand);
 
-    // Shield - attached at hand, facing forward
+    // Shield
     const shieldGroup = new THREE.Group();
     const rimGeo = new THREE.TorusGeometry(0.8, 0.1, 12, 32);
     const rim = new THREE.Mesh(rimGeo, metal);
@@ -910,11 +904,14 @@ function createPlayer() {
     const shieldFace = new THREE.Mesh(shieldFaceGeo, shieldFaceMat);
     shieldFace.position.z = 0.03;
     shieldGroup.add(shieldFace);
-    shieldGroup.position.set(0, -0.6, 1.6);
     leftArmGroup.add(shieldGroup);
 
     playerGroup.add(leftArmGroup);
     playerGroup.userData.leftArm = leftArmGroup;
+    playerGroup.userData.leftUpperArm = leftUpperArm;
+    playerGroup.userData.leftElbow = leftElbow;
+    playerGroup.userData.leftForearm = leftForearm;
+    playerGroup.userData.leftHand = leftHand;
     playerGroup.userData.shield = shieldGroup;
 
     // === RIGHT ARM GROUP (holds sword) ===
@@ -1435,20 +1432,48 @@ function updatePlayer() {
     const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
     playerStats.isBlocking = wantsBlock;
 
-    // === ANIMATE LEFT ARM - move to block position ===
-    if (player.userData.leftArm) {
+    // === ANIMATE LEFT ARM - position each part ===
+    if (player.userData.leftUpperArm && player.userData.leftElbow &&
+        player.userData.leftForearm && player.userData.leftHand && player.userData.shield) {
+
         if (playerStats.isBlocking) {
-            // MOVE arm to front of body and rotate shield to face forward
-            player.userData.leftArm.position.set(0, 2.0, 0.8);  // Center front
-            player.userData.leftArm.rotation.x = 0;
-            player.userData.leftArm.rotation.y = 0;
-            player.userData.leftArm.rotation.z = 0;
+            // BLOCKING: Arm reaches across body, shield in front
+            // Upper arm angles from shoulder toward center
+            player.userData.leftUpperArm.position.set(0.4, -0.2, 0.4);
+            player.userData.leftUpperArm.rotation.set(0.3, 0, -1.2);
+
+            // Elbow in front of chest
+            player.userData.leftElbow.position.set(0.9, -0.3, 0.8);
+
+            // Forearm goes up toward shield position
+            player.userData.leftForearm.position.set(1.2, 0, 1.1);
+            player.userData.leftForearm.rotation.set(0.8, 0, -0.5);
+
+            // Hand holding shield at center front
+            player.userData.leftHand.position.set(1.4, 0.1, 1.4);
+
+            // Shield in front of body, facing forward
+            player.userData.shield.position.set(1.5, 0.1, 1.5);
+            player.userData.shield.rotation.set(0, 0, 0);
         } else {
-            // Resting position - arm at left side
-            player.userData.leftArm.position.set(-1.0, 2.0, 0.2);
-            player.userData.leftArm.rotation.x = 0;
-            player.userData.leftArm.rotation.y = 0;
-            player.userData.leftArm.rotation.z = 0;
+            // RESTING: Arm hangs at left side
+            // Upper arm down from shoulder
+            player.userData.leftUpperArm.position.set(0, -0.4, 0.2);
+            player.userData.leftUpperArm.rotation.set(0.3, 0, 0);
+
+            // Elbow below
+            player.userData.leftElbow.position.set(0, -0.85, 0.45);
+
+            // Forearm angled forward
+            player.userData.leftForearm.position.set(0, -0.9, 1.0);
+            player.userData.leftForearm.rotation.set(1.2, 0, 0);
+
+            // Hand at end
+            player.userData.leftHand.position.set(0, -0.7, 1.5);
+
+            // Shield at hand
+            player.userData.shield.position.set(0, -0.6, 1.6);
+            player.userData.shield.rotation.set(0, 0, 0);
         }
     }
 
