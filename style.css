@@ -281,7 +281,7 @@ body {
 /* Sound Button - Fixed position, bottom-right corner */
 .sound-btn {
     position: fixed !important;
-    bottom: 100px !important;
+    bottom: 160px !important;
     right: 20px !important;
     left: auto !important;
     z-index: 99999 !important;
