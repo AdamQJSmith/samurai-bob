@@ -1420,18 +1420,30 @@ function updatePlayer() {
     const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
     playerStats.isBlocking = wantsBlock;
 
-    // === ANIMATE LEFT ARM (shield arm) ===
-    if (player.userData.leftArm) {
+    // === ANIMATE LEFT ARM AND SHIELD ===
+    if (player.userData.leftArm && player.userData.shield) {
         if (playerStats.isBlocking) {
-            // Arm comes forward and up - classic shield block stance
-            player.userData.leftArm.rotation.x = -1.2;  // Swing arm forward/up
-            player.userData.leftArm.rotation.y = 0.6;   // Bring toward center
-            player.userData.leftArm.rotation.z = -0.3;  // Tilt shield face outward
+            // Arm: subtle raise only
+            player.userData.leftArm.rotation.x = -0.3;
+            player.userData.leftArm.rotation.y = 0.2;
+            player.userData.leftArm.rotation.z = 0;
+
+            // Shield: move directly to blocking position (in front of chest, facing forward)
+            player.userData.shield.position.set(0.9, 0.3, 1.0);
+            player.userData.shield.rotation.x = 0;
+            player.userData.shield.rotation.y = 0;
+            player.userData.shield.rotation.z = 0;
         } else {
-            // Relaxed position at side
+            // Arm: relaxed
             player.userData.leftArm.rotation.x = 0;
             player.userData.leftArm.rotation.y = 0;
             player.userData.leftArm.rotation.z = 0;
+
+            // Shield: resting position on forearm
+            player.userData.shield.position.set(-0.6, -0.4, 0.4);
+            player.userData.shield.rotation.x = 0;
+            player.userData.shield.rotation.y = 0;
+            player.userData.shield.rotation.z = 0;
         }
     }
 
