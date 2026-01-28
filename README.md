@@ -130,6 +130,12 @@ Deploy from the repo root. The directory must include `index.html`.
 
 Live URL format: `https://samurai-bob-3d.quick.shopify.io`
 
+### Build and Deploy Notes
+
+- Quick hosts static files only
+- The deploy directory must include `index.html`
+- If you add a build step later, deploy the build output folder, not the source
+
 ---
 
 **Have fun, Samurai Bob!** ⚔️🛡️
