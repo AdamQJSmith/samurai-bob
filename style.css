@@ -631,7 +631,7 @@ body {
 /* Kill Feed */
 #kill-feed {
     position: absolute;
-    top: 150px;
+    top: 200px;
     right: 20px;
     text-align: right;
     pointer-events: none;

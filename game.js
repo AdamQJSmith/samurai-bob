@@ -1315,7 +1315,12 @@ function setupCameraControls() {
     // Simple: left click = attack
     canvas.addEventListener('mousedown', (e) => {
         if (gameState === 'playing' && e.button === 0) {
-            playerAttack();
+            // In leaf form, clicking triggers the leaf solidify attack
+            if (playerStats.isLeafForm) {
+                solidifyFromLeaves();
+            } else {
+                playerAttack();
+            }
         }
     });
 
