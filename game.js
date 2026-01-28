@@ -867,61 +867,55 @@ function createPlayer() {
     belt.position.y = 1.15;
     playerGroup.add(belt);
 
-    // === LEFT ARM WITH ELBOW - Clean structure ===
-    // Upper arm pivots at shoulder
-    const leftUpperArmGroup = new THREE.Group();
-    leftUpperArmGroup.position.set(-1.1, 2.0, 0);
+    // === LEFT ARM - Simple bent arm that swings to block ===
+    const leftArmGroup = new THREE.Group();
+    leftArmGroup.position.set(-1.0, 2.0, 0.2); // Shoulder position
 
-    // Upper arm mesh - points straight down in local space
-    const upperArmGeo = new THREE.CylinderGeometry(0.26, 0.24, 0.8, 12);
+    // Upper arm - angled down and slightly forward
+    const upperArmGeo = new THREE.CylinderGeometry(0.25, 0.22, 1.0, 12);
     const leftUpperArm = new THREE.Mesh(upperArmGeo, kimonoBlue);
-    leftUpperArm.position.set(0, -0.4, 0);
-    leftUpperArmGroup.add(leftUpperArm);
+    leftUpperArm.position.set(0, -0.4, 0.2);
+    leftUpperArm.rotation.x = 0.3;
+    leftArmGroup.add(leftUpperArm);
 
-    // Elbow sphere at bottom of upper arm
+    // Elbow
     const elbowGeo = new THREE.SphereGeometry(0.2, 10, 10);
     const leftElbow = new THREE.Mesh(elbowGeo, kimonoBlue);
-    leftElbow.position.set(0, -0.8, 0);
-    leftUpperArmGroup.add(leftElbow);
+    leftElbow.position.set(0, -0.85, 0.45);
+    leftArmGroup.add(leftElbow);
 
-    // Forearm pivots at elbow
-    const leftForearmGroup = new THREE.Group();
-    leftForearmGroup.position.set(0, -0.8, 0);
-
-    // Forearm mesh - points straight down in local space
-    const forearmGeo = new THREE.CylinderGeometry(0.22, 0.2, 0.7, 12);
+    // Forearm - angled forward from elbow
+    const forearmGeo = new THREE.CylinderGeometry(0.2, 0.18, 0.9, 12);
     const leftForearm = new THREE.Mesh(forearmGeo, kimonoBlue);
-    leftForearm.position.set(0, -0.35, 0);
-    leftForearmGroup.add(leftForearm);
+    leftForearm.position.set(0, -0.9, 1.0);
+    leftForearm.rotation.x = 1.2;
+    leftArmGroup.add(leftForearm);
 
-    // Hand at end of forearm
-    const handGeo = new THREE.SphereGeometry(0.22, 10, 10);
+    // Hand
+    const handGeo = new THREE.SphereGeometry(0.2, 10, 10);
     const leftHand = new THREE.Mesh(handGeo, skin);
-    leftHand.position.set(0, -0.7, 0);
-    leftForearmGroup.add(leftHand);
+    leftHand.position.set(0, -0.7, 1.5);
+    leftArmGroup.add(leftHand);
 
-    // Shield on outer side of forearm
+    // Shield - attached at hand, facing forward
     const shieldGroup = new THREE.Group();
-    const rimGeo = new THREE.TorusGeometry(0.75, 0.08, 12, 32);
+    const rimGeo = new THREE.TorusGeometry(0.8, 0.1, 12, 32);
     const rim = new THREE.Mesh(rimGeo, metal);
     shieldGroup.add(rim);
-    const shieldFaceGeo = new THREE.CircleGeometry(0.7, 32);
+    const shieldFaceGeo = new THREE.CircleGeometry(0.75, 32);
     const shieldFaceMat = new THREE.MeshStandardMaterial({
         map: createShieldTexture(),
         roughness: 0.7
     });
     const shieldFace = new THREE.Mesh(shieldFaceGeo, shieldFaceMat);
-    shieldFace.position.z = 0.02;
+    shieldFace.position.z = 0.03;
     shieldGroup.add(shieldFace);
-    shieldGroup.position.set(-0.4, -0.4, 0.3);
-    shieldGroup.rotation.y = -0.3;
-    leftForearmGroup.add(shieldGroup);
-    playerGroup.userData.shield = shieldGroup;
+    shieldGroup.position.set(0, -0.6, 1.6);
+    leftArmGroup.add(shieldGroup);
 
-    leftUpperArmGroup.add(leftForearmGroup);
-    playerGroup.add(leftUpperArmGroup);
-    playerGroup.userData.leftArm = leftUpperArmGroup;
-    playerGroup.userData.leftForearm = leftForearmGroup;
+    playerGroup.add(leftArmGroup);
+    playerGroup.userData.leftArm = leftArmGroup;
+    playerGroup.userData.shield = shieldGroup;
 
     // === RIGHT ARM GROUP (holds sword) ===
     const rightArmGroup = new THREE.Group();
@@ -1441,27 +1435,18 @@ function updatePlayer() {
     const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
     playerStats.isBlocking = wantsBlock;
 
-    // === ANIMATE LEFT ARM (upper arm + forearm with elbow) ===
-    if (player.userData.leftArm && player.userData.leftForearm) {
+    // === ANIMATE LEFT ARM (whole arm swings to block) ===
+    if (player.userData.leftArm) {
         if (playerStats.isBlocking) {
-            // Upper arm: swing forward and slightly inward
-            player.userData.leftArm.rotation.x = -1.0;  // Forward
-            player.userData.leftArm.rotation.y = 0.5;   // Inward toward center
-            player.userData.leftArm.rotation.z = 0;
-
-            // Forearm: bend elbow to bring shield up and face it forward
-            player.userData.leftForearm.rotation.x = 1.8;  // Bend elbow - forearm comes up
-            player.userData.leftForearm.rotation.y = 0;
-            player.userData.leftForearm.rotation.z = 0;
+            // Swing whole arm inward and up - shield moves to center front
+            player.userData.leftArm.rotation.x = -0.3;  // Tilt up slightly
+            player.userData.leftArm.rotation.y = 1.2;   // Swing inward to center
+            player.userData.leftArm.rotation.z = 0.2;   // Slight roll
         } else {
-            // Relaxed - arms hang down naturally
+            // Resting position - arm at side
             player.userData.leftArm.rotation.x = 0;
             player.userData.leftArm.rotation.y = 0;
-            player.userData.leftArm.rotation.z = -0.3;  // Slight outward angle
-
-            player.userData.leftForearm.rotation.x = 0.3; // Slight bend
-            player.userData.leftForearm.rotation.y = 0;
-            player.userData.leftForearm.rotation.z = 0;
+            player.userData.leftArm.rotation.z = 0;
         }
     }
 
