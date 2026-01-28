@@ -5499,18 +5499,25 @@ function gameOver() {
 
 // Global sound toggle function (called by UI button)
 let lastSoundToggle = 0;
+let soundButtonInitialized = false;
+
 function toggleSound() {
-    // Debounce - prevent rapid toggles (must wait 300ms between toggles)
-    const now = Date.now();
-    if (now - lastSoundToggle < 300) {
-        console.log('Sound toggle debounced');
+    // Only allow toggle when pointer is NOT locked (not in active gameplay)
+    if (document.pointerLockElement) {
+        console.log('Sound toggle blocked - pointer locked');
         return;
+    }
+
+    // Debounce - prevent rapid toggles (must wait 500ms between toggles)
+    const now = Date.now();
+    if (now - lastSoundToggle < 500) {
+        return; // Silently ignore rapid toggles
     }
     lastSoundToggle = now;
 
     if (audioManager) {
         const muted = audioManager.toggleMute();
-        console.log('Sound toggled, muted:', muted);
+        console.log('Sound toggled by user, muted:', muted);
         const btn = document.getElementById('sound-toggle');
         if (btn) {
             btn.textContent = muted ? '🔇' : '🔊';
@@ -5518,6 +5525,32 @@ function toggleSound() {
         }
     }
 }
+
+// Initialize sound button with single click listener
+function initSoundButton() {
+    if (soundButtonInitialized) return;
+    const btn = document.getElementById('sound-toggle');
+    if (btn) {
+        // Only use mousedown to avoid any click event issues
+        btn.addEventListener('mousedown', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation();
+            // Small delay to ensure we're not in a weird state
+            setTimeout(toggleSound, 50);
+        }, { capture: true });
+        soundButtonInitialized = true;
+        console.log('Sound button initialized');
+    }
+}
+
+// Initialize when DOM ready
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSoundButton);
+} else {
+    initSoundButton();
+}
+
 window.toggleSound = toggleSound;
 
 // Ensure startGame is always on window (even if there were errors)
