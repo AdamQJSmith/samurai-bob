@@ -1004,7 +1004,7 @@ function createPlayer() {
     knotTop.scale.set(1.1, 0.7, 1.1);
     playerGroup.add(knotTop);
 
-    // === SHIELD attached to left arm ===
+    // === SHIELD attached to left arm (on forearm, facing forward) ===
     const shieldGroup = new THREE.Group();
     const rimGeo = new THREE.TorusGeometry(0.85, 0.1, 12, 32);
     const rim = new THREE.Mesh(rimGeo, metal);
@@ -1016,8 +1016,10 @@ function createPlayer() {
     }));
     shieldFace.position.z = 0.03;
     shieldGroup.add(shieldFace);
-    shieldGroup.position.set(-0.9, -0.6, 0.5);
-    shieldGroup.rotation.y = 0.3;
+    // Shield strapped to forearm, facing outward
+    shieldGroup.position.set(-0.6, -0.4, 0.4);
+    shieldGroup.rotation.x = 0;
+    shieldGroup.rotation.y = 0;
     leftArmGroup.add(shieldGroup);
     playerGroup.userData.shield = shieldGroup;
 
@@ -1421,10 +1423,10 @@ function updatePlayer() {
     // === ANIMATE LEFT ARM (shield arm) ===
     if (player.userData.leftArm) {
         if (playerStats.isBlocking) {
-            // Bring arm across body - shield raised in front defensively
-            player.userData.leftArm.rotation.x = -1.4;  // Raise arm up high
-            player.userData.leftArm.rotation.y = 1.2;   // Swing across to center of body
-            player.userData.leftArm.rotation.z = 0.6;   // Angle shield to face forward
+            // Arm comes forward and up - classic shield block stance
+            player.userData.leftArm.rotation.x = -1.2;  // Swing arm forward/up
+            player.userData.leftArm.rotation.y = 0.6;   // Bring toward center
+            player.userData.leftArm.rotation.z = -0.3;  // Tilt shield face outward
         } else {
             // Relaxed position at side
             player.userData.leftArm.rotation.x = 0;
