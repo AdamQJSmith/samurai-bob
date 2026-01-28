@@ -1312,8 +1312,9 @@ function init() {
 function setupCameraControls() {
     const canvas = renderer.domElement;
 
-    // Simple: left click = attack
-    canvas.addEventListener('mousedown', (e) => {
+    // Track mouse button state globally
+    document.addEventListener('mousedown', (e) => {
+        mouseDown[e.button] = true;
         if (gameState === 'playing' && e.button === 0) {
             // In leaf form, clicking triggers the leaf solidify attack
             if (playerStats.isLeafForm) {
@@ -1322,6 +1323,10 @@ function setupCameraControls() {
                 playerAttack();
             }
         }
+    });
+
+    document.addEventListener('mouseup', (e) => {
+        mouseDown[e.button] = false;
     });
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -3643,10 +3648,11 @@ function updateLeafForm() {
     });
     
     // Invincible in leaf form - no damage taken
-    
+
     // Click or attack key to solidify and attack
-    if (playerStats.isAttacking || keys['j']) {
+    if (playerStats.isAttacking || keys['j'] || mouseDown[0]) {
         solidifyFromLeaves();
+        mouseDown[0] = false; // Reset to prevent repeated triggers
     }
 }
 
