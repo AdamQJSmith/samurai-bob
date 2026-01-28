@@ -867,29 +867,30 @@ function createPlayer() {
     belt.position.y = 1.15;
     playerGroup.add(belt);
 
-    // === LEFT ARM - arm parts stored separately for animation ===
+    // === LEFT ARM - using tube geometry that follows a path ===
     const leftArmGroup = new THREE.Group();
     leftArmGroup.position.set(-1.0, 2.0, 0.2); // Shoulder position (stays fixed)
 
-    // Upper arm
-    const upperArmGeo = new THREE.CylinderGeometry(0.25, 0.22, 1.0, 12);
-    const leftUpperArm = new THREE.Mesh(upperArmGeo, kimonoBlue);
-    leftArmGroup.add(leftUpperArm);
+    // Shoulder joint
+    const shoulderGeo = new THREE.SphereGeometry(0.25, 10, 10);
+    const leftShoulder = new THREE.Mesh(shoulderGeo, kimonoBlue);
+    leftShoulder.position.set(0, 0, 0);
+    leftArmGroup.add(leftShoulder);
 
-    // Elbow
+    // Elbow joint
     const elbowGeo = new THREE.SphereGeometry(0.2, 10, 10);
     const leftElbow = new THREE.Mesh(elbowGeo, kimonoBlue);
     leftArmGroup.add(leftElbow);
 
-    // Forearm
-    const forearmGeo = new THREE.CylinderGeometry(0.2, 0.18, 0.9, 12);
-    const leftForearm = new THREE.Mesh(forearmGeo, kimonoBlue);
-    leftArmGroup.add(leftForearm);
-
     // Hand
-    const handGeo = new THREE.SphereGeometry(0.2, 10, 10);
+    const handGeo = new THREE.SphereGeometry(0.22, 10, 10);
     const leftHand = new THREE.Mesh(handGeo, skin);
     leftArmGroup.add(leftHand);
+
+    // Upper arm tube (will be recreated on animation)
+    let leftUpperArmMesh = null;
+    // Forearm tube (will be recreated on animation)
+    let leftForearmMesh = null;
 
     // Shield
     const shieldGroup = new THREE.Group();
@@ -906,13 +907,37 @@ function createPlayer() {
     shieldGroup.add(shieldFace);
     leftArmGroup.add(shieldGroup);
 
+    // Function to create arm tube between two points
+    function createArmSegment(start, end, startRadius, endRadius, material) {
+        const direction = new THREE.Vector3().subVectors(end, start);
+        const length = direction.length();
+        const geo = new THREE.CylinderGeometry(endRadius, startRadius, length, 8);
+        const mesh = new THREE.Mesh(geo, material);
+
+        // Position at midpoint
+        mesh.position.copy(start).add(end).multiplyScalar(0.5);
+
+        // Rotate to point from start to end
+        const up = new THREE.Vector3(0, 1, 0);
+        const axis = new THREE.Vector3().crossVectors(up, direction.normalize()).normalize();
+        const angle = Math.acos(up.dot(direction.normalize()));
+        if (axis.length() > 0.001) {
+            mesh.setRotationFromAxisAngle(axis, angle);
+        }
+
+        return mesh;
+    }
+
     playerGroup.add(leftArmGroup);
     playerGroup.userData.leftArm = leftArmGroup;
-    playerGroup.userData.leftUpperArm = leftUpperArm;
+    playerGroup.userData.leftShoulder = leftShoulder;
     playerGroup.userData.leftElbow = leftElbow;
-    playerGroup.userData.leftForearm = leftForearm;
     playerGroup.userData.leftHand = leftHand;
     playerGroup.userData.shield = shieldGroup;
+    playerGroup.userData.createArmSegment = createArmSegment;
+    playerGroup.userData.kimonoBlue = kimonoBlue;
+    playerGroup.userData.leftUpperArmMesh = null;
+    playerGroup.userData.leftForearmMesh = null;
 
     // === RIGHT ARM GROUP (holds sword) ===
     const rightArmGroup = new THREE.Group();
@@ -1432,49 +1457,45 @@ function updatePlayer() {
     const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
     playerStats.isBlocking = wantsBlock;
 
-    // === ANIMATE LEFT ARM - position each part ===
-    if (player.userData.leftUpperArm && player.userData.leftElbow &&
-        player.userData.leftForearm && player.userData.leftHand && player.userData.shield) {
+    // === ANIMATE LEFT ARM - position joints and rebuild arm segments ===
+    if (player.userData.leftElbow && player.userData.leftHand && player.userData.shield) {
+        const shoulderPos = new THREE.Vector3(0, 0, 0);
+        let elbowPos, handPos, shieldPos;
 
         if (playerStats.isBlocking) {
-            // BLOCKING: Arm reaches across body, shield in front
-            // Upper arm angles from shoulder toward center
-            player.userData.leftUpperArm.position.set(0.4, -0.2, 0.4);
-            player.userData.leftUpperArm.rotation.set(0.3, 0, -1.2);
-
-            // Elbow in front of chest
-            player.userData.leftElbow.position.set(0.9, -0.3, 0.8);
-
-            // Forearm goes up toward shield position
-            player.userData.leftForearm.position.set(1.2, 0, 1.1);
-            player.userData.leftForearm.rotation.set(0.8, 0, -0.5);
-
-            // Hand holding shield at center front
-            player.userData.leftHand.position.set(1.4, 0.1, 1.4);
-
-            // Shield in front of body, facing forward
-            player.userData.shield.position.set(1.5, 0.1, 1.5);
-            player.userData.shield.rotation.set(0, 0, 0);
+            // BLOCKING: Arm reaches across body, shield in front of chest
+            elbowPos = new THREE.Vector3(0.6, -0.2, 0.5);
+            handPos = new THREE.Vector3(1.2, 0, 1.0);
+            shieldPos = new THREE.Vector3(1.3, 0, 1.2);
         } else {
-            // RESTING: Arm hangs at left side
-            // Upper arm down from shoulder
-            player.userData.leftUpperArm.position.set(0, -0.4, 0.2);
-            player.userData.leftUpperArm.rotation.set(0.3, 0, 0);
-
-            // Elbow below
-            player.userData.leftElbow.position.set(0, -0.85, 0.45);
-
-            // Forearm angled forward
-            player.userData.leftForearm.position.set(0, -0.9, 1.0);
-            player.userData.leftForearm.rotation.set(1.2, 0, 0);
-
-            // Hand at end
-            player.userData.leftHand.position.set(0, -0.7, 1.5);
-
-            // Shield at hand
-            player.userData.shield.position.set(0, -0.6, 1.6);
-            player.userData.shield.rotation.set(0, 0, 0);
+            // RESTING: Arm hangs at left side, shield low
+            elbowPos = new THREE.Vector3(0, -0.7, 0.2);
+            handPos = new THREE.Vector3(0.1, -1.2, 0.6);
+            shieldPos = new THREE.Vector3(0.2, -1.1, 0.8);
         }
+
+        // Position joints
+        player.userData.leftElbow.position.copy(elbowPos);
+        player.userData.leftHand.position.copy(handPos);
+        player.userData.shield.position.copy(shieldPos);
+
+        // Remove old arm segments
+        if (player.userData.leftUpperArmMesh) {
+            player.userData.leftArm.remove(player.userData.leftUpperArmMesh);
+        }
+        if (player.userData.leftForearmMesh) {
+            player.userData.leftArm.remove(player.userData.leftForearmMesh);
+        }
+
+        // Create new arm segments connecting the joints
+        const createSeg = player.userData.createArmSegment;
+        const mat = player.userData.kimonoBlue;
+
+        player.userData.leftUpperArmMesh = createSeg(shoulderPos, elbowPos, 0.22, 0.18, mat);
+        player.userData.leftForearmMesh = createSeg(elbowPos, handPos, 0.18, 0.15, mat);
+
+        player.userData.leftArm.add(player.userData.leftUpperArmMesh);
+        player.userData.leftArm.add(player.userData.leftForearmMesh);
     }
 
     // === ANIMATE RIGHT ARM (sword arm) ===
