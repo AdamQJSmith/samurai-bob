@@ -1,4 +1,4 @@
-// ===== GAME STATE =====
+// ===== GAME STATE ===== v2-fix
 let gameState = 'title';
 let scene, camera, renderer;
 let player, enemies = [], particles = [];
@@ -872,10 +872,10 @@ function createPlayer() {
     leftArmGroup.position.set(-1.0, 2.0, 0.2); // Shoulder position (stays fixed)
 
     // Shoulder joint
-    const shoulderGeo = new THREE.SphereGeometry(0.25, 10, 10);
-    const leftShoulder = new THREE.Mesh(shoulderGeo, kimonoBlue);
-    leftShoulder.position.set(0, 0, 0);
-    leftArmGroup.add(leftShoulder);
+    const leftShoulderJointGeo = new THREE.SphereGeometry(0.25, 10, 10);
+    const leftShoulderJoint = new THREE.Mesh(leftShoulderJointGeo, kimonoBlue);
+    leftShoulderJoint.position.set(0, 0, 0);
+    leftArmGroup.add(leftShoulderJoint);
 
     // Elbow joint
     const elbowGeo = new THREE.SphereGeometry(0.2, 10, 10);
