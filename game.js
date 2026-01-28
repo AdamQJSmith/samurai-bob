@@ -1650,62 +1650,112 @@ function createPlayer() {
     const playerGroup = new THREE.Group();
     playerGroup.name = 'samuraiBob';
 
-    // ========== MATERIALS ==========
+    // ========== MATERIALS - Exact colors from reference ==========
+    // Blue kimono - matches the vibrant blue in reference
     const kimonoBlue = new THREE.MeshStandardMaterial({
-        color: 0x3366DD,
+        color: 0x2E5CB8,
         roughness: 0.7,
         flatShading: true
     });
+    // Skin - warm peach tone from reference
     const skin = new THREE.MeshStandardMaterial({
-        color: 0xE8B080,
-        roughness: 0.65,
+        color: 0xF0B888,
+        roughness: 0.6,
         flatShading: true
     });
+    // Darker skin for nose
+    const noseSkin = new THREE.MeshStandardMaterial({
+        color: 0xD4956A,
+        roughness: 0.6,
+        flatShading: true
+    });
+    // Black for hair, eyebrows, mustache
     const black = new THREE.MeshStandardMaterial({
-        color: 0x252525,
-        roughness: 0.75,
-        flatShading: true
-    });
-    const pants = new THREE.MeshStandardMaterial({
-        color: 0xCC3333,
-        roughness: 0.7,
-        flatShading: true
-    });
-    const shoes = new THREE.MeshStandardMaterial({
-        color: 0x2a3040,
+        color: 0x1a1a1a,
         roughness: 0.8,
         flatShading: true
     });
-    const metal = new THREE.MeshStandardMaterial({
-        color: 0x888888,
-        roughness: 0.3,
-        metalness: 0.6,
+    // Red pants - darker red/maroon from reference
+    const pants = new THREE.MeshStandardMaterial({
+        color: 0xAA2222,
+        roughness: 0.7,
         flatShading: true
     });
+    // Dark shoes
+    const shoes = new THREE.MeshStandardMaterial({
+        color: 0x222222,
+        roughness: 0.8,
+        flatShading: true
+    });
+    // Gray metal for shield rim
+    const metal = new THREE.MeshStandardMaterial({
+        color: 0x777788,
+        roughness: 0.4,
+        metalness: 0.5,
+        flatShading: true
+    });
+    // White/gray for collar trim
+    const collarWhite = new THREE.MeshStandardMaterial({
+        color: 0xCCCCCC,
+        roughness: 0.6,
+        flatShading: true
+    });
+    // Black obi belt
+    const obiBelt = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a,
+        roughness: 0.7,
+        flatShading: true
+    });
+    // Pink for cheeks
+    const cheekPink = new THREE.MeshStandardMaterial({
+        color: 0xE07070,
+        roughness: 0.9,
+        flatShading: true
+    });
+    // Red for mouth
+    const mouthRed = new THREE.MeshStandardMaterial({
+        color: 0xCC3333,
+        roughness: 0.6,
+        flatShading: true
+    });
+    // White for eye highlights
+    const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-    // ========== BODY - Using textured front ==========
-    // Main torso with body texture
-    const torsoGeo = new THREE.BoxGeometry(1.8, 1.3, 1.2);
-    const bodyTexture = createBodyTexture();
-    const torsoMaterials = [
-        kimonoBlue, // right
-        kimonoBlue, // left
-        kimonoBlue, // top
-        kimonoBlue, // bottom
-        new THREE.MeshStandardMaterial({ map: bodyTexture, roughness: 0.7 }), // front (textured)
-        kimonoBlue  // back
-    ];
-    const torso = new THREE.Mesh(torsoGeo, torsoMaterials);
+    // ========== BODY - Blue kimono with collar and belt ==========
+    // Main torso - blue kimono
+    const torsoGeo = new THREE.BoxGeometry(1.8, 1.4, 1.1);
+    const torso = new THREE.Mesh(torsoGeo, kimonoBlue);
     torso.position.y = 1.35;
     playerGroup.add(torso);
 
-    // Shoulder bumps
-    const shoulderGeo = new THREE.SphereGeometry(0.4, 6, 5);
+    // V-COLLAR - White/gray trim like reference
+    // Left collar piece
+    const collarGeo = new THREE.BoxGeometry(0.15, 0.9, 0.5);
+    const leftCollar = new THREE.Mesh(collarGeo, collarWhite);
+    leftCollar.position.set(-0.35, 1.7, 0.45);
+    leftCollar.rotation.z = 0.4;
+    leftCollar.rotation.y = -0.15;
+    playerGroup.add(leftCollar);
+    // Right collar piece
+    const rightCollar = new THREE.Mesh(collarGeo, collarWhite);
+    rightCollar.position.set(0.35, 1.7, 0.45);
+    rightCollar.rotation.z = -0.4;
+    rightCollar.rotation.y = 0.15;
+    playerGroup.add(rightCollar);
+
+    // BLACK OBI BELT around waist
+    const obiGeo = new THREE.BoxGeometry(1.85, 0.35, 1.15);
+    const obi = new THREE.Mesh(obiGeo, obiBelt);
+    obi.position.y = 0.85;
+    playerGroup.add(obi);
+
+    // Shoulder bumps - rounded shoulders
+    const shoulderGeo = new THREE.SphereGeometry(0.38, 6, 5);
     const leftShoulderBump = new THREE.Mesh(shoulderGeo, kimonoBlue);
-    leftShoulderBump.position.set(-0.95, 1.65, 0);
+    leftShoulderBump.position.set(-0.95, 1.7, 0);
     playerGroup.add(leftShoulderBump);
     const rightShoulderBump = new THREE.Mesh(shoulderGeo, kimonoBlue);
-    rightShoulderBump.position.set(0.95, 1.65, 0);
+    rightShoulderBump.position.set(0.95, 1.7, 0);
     playerGroup.add(rightShoulderBump);
 
     // ========== LEFT ARM with SHIELD ==========
@@ -1882,165 +1932,185 @@ function createPlayer() {
     rightFoot.scale.set(1.0, 0.4, 1.15);
     playerGroup.add(rightFoot);
 
-    // ========== HEAD - All 3D geometry, no textures ==========
-    const headRadius = 1.5;
-    const headGeo = new THREE.SphereGeometry(headRadius, 16, 12);
+    // ========== HEAD - Large round head like reference ==========
+    // Head is slightly wider than tall, warm peach skin
+    const headGeo = new THREE.SphereGeometry(1.5, 12, 10);
     const head = new THREE.Mesh(headGeo, skin);
-    head.position.y = 3.6;
-    head.scale.set(1, 0.9, 0.92);
+    head.position.y = 3.5;
+    head.scale.set(1.05, 0.95, 0.95); // Wider than tall
     playerGroup.add(head);
 
-    // ========== 3D EYEBROWS - Thick angular wedges ==========
-    const browMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.8 });
+    // ========== EYEBROWS - VERY thick, angled DOWN toward center (angry/determined) ==========
+    // In reference, eyebrows are thick angular wedges pointing down to nose
+    const browGeo = new THREE.BoxGeometry(0.65, 0.22, 0.22);
 
-    // Left eyebrow - angled wedge
-    const leftBrowGeo = new THREE.BoxGeometry(0.7, 0.18, 0.25);
-    const leftBrow = new THREE.Mesh(leftBrowGeo, browMat);
-    leftBrow.position.set(-0.45, 3.95, 1.25);
-    leftBrow.rotation.z = 0.25;
-    leftBrow.rotation.y = -0.15;
+    // Left eyebrow - angles DOWN toward center
+    const leftBrow = new THREE.Mesh(browGeo, black);
+    leftBrow.position.set(-0.5, 3.9, 1.28);
+    leftBrow.rotation.z = -0.35; // Angles DOWN toward center
+    leftBrow.rotation.x = -0.1;
     playerGroup.add(leftBrow);
 
-    // Right eyebrow
-    const rightBrow = new THREE.Mesh(leftBrowGeo, browMat);
-    rightBrow.position.set(0.45, 3.95, 1.25);
-    rightBrow.rotation.z = -0.25;
-    rightBrow.rotation.y = 0.15;
+    // Right eyebrow - angles DOWN toward center
+    const rightBrow = new THREE.Mesh(browGeo, black);
+    rightBrow.position.set(0.5, 3.9, 1.28);
+    rightBrow.rotation.z = 0.35; // Angles DOWN toward center
+    rightBrow.rotation.x = -0.1;
     playerGroup.add(rightBrow);
 
-    // ========== 3D EYES - Black ovals with white highlights ==========
-    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3 });
-    const eyeGeo = new THREE.SphereGeometry(0.18, 8, 8);
+    // ========== EYES - Black ovals with white highlights in upper-left ==========
+    const eyeGeo = new THREE.SphereGeometry(0.16, 8, 8);
+    const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2 });
 
-    // Left eye
+    // Left eye - oval shape
     const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
-    leftEye.position.set(-0.45, 3.65, 1.35);
-    leftEye.scale.set(1, 1.3, 0.6);
+    leftEye.position.set(-0.5, 3.6, 1.32);
+    leftEye.scale.set(1.0, 1.4, 0.5);
     playerGroup.add(leftEye);
 
     // Right eye
     const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
-    rightEye.position.set(0.45, 3.65, 1.35);
-    rightEye.scale.set(1, 1.3, 0.6);
+    rightEye.position.set(0.5, 3.6, 1.32);
+    rightEye.scale.set(1.0, 1.4, 0.5);
     playerGroup.add(rightEye);
 
-    // Eye highlights (white dots)
-    const highlightMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    const highlightGeo = new THREE.SphereGeometry(0.06, 6, 6);
+    // Eye highlights - small white dots in upper-left of each eye
+    const highlightGeo = new THREE.SphereGeometry(0.055, 6, 6);
 
-    const leftHighlight = new THREE.Mesh(highlightGeo, highlightMat);
-    leftHighlight.position.set(-0.52, 3.72, 1.4);
+    const leftHighlight = new THREE.Mesh(highlightGeo, white);
+    leftHighlight.position.set(-0.57, 3.68, 1.38);
     playerGroup.add(leftHighlight);
 
-    const rightHighlight = new THREE.Mesh(highlightGeo, highlightMat);
-    rightHighlight.position.set(0.38, 3.72, 1.4);
+    const rightHighlight = new THREE.Mesh(highlightGeo, white);
+    rightHighlight.position.set(0.43, 3.68, 1.38);
     playerGroup.add(rightHighlight);
 
-    // ========== 3D NOSE - Big and round like reference ==========
-    const noseGeo = new THREE.SphereGeometry(0.28, 8, 6);
-    const noseMat = new THREE.MeshStandardMaterial({ color: 0xDDA875, roughness: 0.55 });
-    const nose = new THREE.Mesh(noseGeo, noseMat);
-    nose.position.set(0, 3.4, 1.45);
-    nose.scale.set(1.2, 0.9, 0.8);
+    // ========== NOSE - Large bulbous nose, slightly darker skin ==========
+    const noseGeo = new THREE.SphereGeometry(0.32, 8, 6);
+    const nose = new THREE.Mesh(noseGeo, noseSkin);
+    nose.position.set(0, 3.35, 1.42);
+    nose.scale.set(1.0, 0.85, 0.7);
     playerGroup.add(nose);
 
-    // ========== 3D ROSY CHEEKS - Pink circles ==========
-    const cheekMat = new THREE.MeshStandardMaterial({ color: 0xE88888, roughness: 0.9 });
-    const cheekGeo = new THREE.SphereGeometry(0.2, 8, 8);
+    // ========== ROSY CHEEKS - Bright pink circles ==========
+    const cheekGeo = new THREE.CircleGeometry(0.22, 12);
 
-    const leftCheek = new THREE.Mesh(cheekGeo, cheekMat);
-    leftCheek.position.set(-0.85, 3.4, 1.1);
-    leftCheek.scale.set(1, 0.8, 0.3);
+    // Left cheek - flat circle on face
+    const leftCheek = new THREE.Mesh(cheekGeo, cheekPink);
+    leftCheek.position.set(-0.95, 3.4, 1.15);
+    leftCheek.rotation.y = 0.5;
     playerGroup.add(leftCheek);
 
-    const rightCheek = new THREE.Mesh(cheekGeo, cheekMat);
-    rightCheek.position.set(0.85, 3.4, 1.1);
-    rightCheek.scale.set(1, 0.8, 0.3);
+    // Right cheek
+    const rightCheek = new THREE.Mesh(cheekGeo, cheekPink);
+    rightCheek.position.set(0.95, 3.4, 1.15);
+    rightCheek.rotation.y = -0.5;
     playerGroup.add(rightCheek);
 
-    // ========== 3D MUSTACHE - Curly and prominent ==========
-    const mustacheMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.8 });
-
-    // Center part of mustache
-    const mustacheCenterGeo = new THREE.SphereGeometry(0.25, 8, 6);
-    const mustacheCenter = new THREE.Mesh(mustacheCenterGeo, mustacheMat);
-    mustacheCenter.position.set(0, 3.15, 1.35);
-    mustacheCenter.scale.set(1.5, 0.6, 0.5);
+    // ========== MUSTACHE - Handlebar style, curls UP at ends ==========
+    // Center section under nose
+    const mustacheCenterGeo = new THREE.BoxGeometry(0.5, 0.15, 0.2);
+    const mustacheCenter = new THREE.Mesh(mustacheCenterGeo, black);
+    mustacheCenter.position.set(0, 3.12, 1.35);
     playerGroup.add(mustacheCenter);
 
-    // Left curl
-    const curlGeo = new THREE.TorusGeometry(0.25, 0.08, 8, 12, Math.PI);
-    const leftCurl = new THREE.Mesh(curlGeo, mustacheMat);
-    leftCurl.position.set(-0.55, 3.12, 1.25);
-    leftCurl.rotation.z = Math.PI * 0.6;
-    leftCurl.rotation.y = -0.3;
-    playerGroup.add(leftCurl);
+    // Left side - extends out and curves UP
+    const mustacheSideGeo = new THREE.BoxGeometry(0.45, 0.12, 0.15);
+    const leftMustache = new THREE.Mesh(mustacheSideGeo, black);
+    leftMustache.position.set(-0.42, 3.12, 1.28);
+    leftMustache.rotation.z = -0.2;
+    playerGroup.add(leftMustache);
 
-    // Right curl
-    const rightCurl = new THREE.Mesh(curlGeo, mustacheMat);
-    rightCurl.position.set(0.55, 3.12, 1.25);
-    rightCurl.rotation.z = -Math.PI * 0.6;
-    rightCurl.rotation.y = 0.3;
-    playerGroup.add(rightCurl);
+    // Left curl tip - curls UP
+    const curlTipGeo = new THREE.SphereGeometry(0.1, 6, 6);
+    const leftCurlTip = new THREE.Mesh(curlTipGeo, black);
+    leftCurlTip.position.set(-0.7, 3.2, 1.2);
+    leftCurlTip.scale.set(1.2, 0.8, 0.6);
+    playerGroup.add(leftCurlTip);
 
-    // ========== 3D MOUTH - Red smile ==========
-    const mouthMat = new THREE.MeshStandardMaterial({ color: 0xCC2828, roughness: 0.6 });
-    const mouthGeo = new THREE.SphereGeometry(0.2, 8, 8);
-    const mouth = new THREE.Mesh(mouthGeo, mouthMat);
-    mouth.position.set(0, 2.95, 1.3);
-    mouth.scale.set(1.8, 0.6, 0.4);
+    // Right side
+    const rightMustache = new THREE.Mesh(mustacheSideGeo, black);
+    rightMustache.position.set(0.42, 3.12, 1.28);
+    rightMustache.rotation.z = 0.2;
+    playerGroup.add(rightMustache);
+
+    // Right curl tip - curls UP
+    const rightCurlTip = new THREE.Mesh(curlTipGeo, black);
+    rightCurlTip.position.set(0.7, 3.2, 1.2);
+    rightCurlTip.scale.set(1.2, 0.8, 0.6);
+    playerGroup.add(rightCurlTip);
+
+    // ========== MOUTH - Red smile visible below mustache ==========
+    const mouthGeo = new THREE.SphereGeometry(0.15, 8, 6);
+    const mouth = new THREE.Mesh(mouthGeo, mouthRed);
+    mouth.position.set(0, 2.95, 1.28);
+    mouth.scale.set(2.0, 0.7, 0.4);
     playerGroup.add(mouth);
 
-    // ========== EARS - Large, sticking out ==========
-    const earGeo = new THREE.SphereGeometry(0.35, 6, 5);
+    // ========== EARS - Large, stick out at eye level ==========
+    // Ears are prominent in reference, stick out from sides
+    const earGeo = new THREE.SphereGeometry(0.28, 6, 5);
+
+    // Left ear
     const leftEar = new THREE.Mesh(earGeo, skin);
-    leftEar.position.set(-1.4, 3.55, 0.2);
-    leftEar.scale.set(0.3, 0.9, 0.6);
+    leftEar.position.set(-1.5, 3.5, 0.15);
+    leftEar.scale.set(0.35, 1.0, 0.65);
     playerGroup.add(leftEar);
+
+    // Right ear
     const rightEar = new THREE.Mesh(earGeo, skin);
-    rightEar.position.set(1.4, 3.55, 0.2);
-    rightEar.scale.set(0.3, 0.9, 0.6);
+    rightEar.position.set(1.5, 3.5, 0.15);
+    rightEar.scale.set(0.35, 1.0, 0.65);
     playerGroup.add(rightEar);
 
-    // ========== HAIR - Black with angular low-poly style ==========
-    // Main hair cap covering top/back of head
-    const hairCapGeo = new THREE.SphereGeometry(1.55, 8, 5, 0, Math.PI * 2, 0, Math.PI * 0.55);
+    // ========== HAIR - Angular low-poly black hair ==========
+    // Main hair cap - covers top and back of head with faceted look
+    const hairCapGeo = new THREE.SphereGeometry(1.58, 6, 4, 0, Math.PI * 2, 0, Math.PI * 0.52);
     const hairCap = new THREE.Mesh(hairCapGeo, black);
-    hairCap.position.set(0, 3.85, -0.1);
-    hairCap.rotation.x = 0.15;
+    hairCap.position.set(0, 3.8, -0.05);
+    hairCap.rotation.x = 0.1;
     playerGroup.add(hairCap);
 
-    // Hair front edge - angular band across forehead
-    const hairFrontGeo = new THREE.BoxGeometry(2.4, 0.3, 0.5);
-    const hairFront = new THREE.Mesh(hairFrontGeo, black);
-    hairFront.position.set(0, 4.35, 0.7);
-    hairFront.rotation.x = -0.3;
-    playerGroup.add(hairFront);
+    // Angular hairline across forehead - sharp edge
+    const hairlineGeo = new THREE.BoxGeometry(2.6, 0.25, 0.45);
+    const hairline = new THREE.Mesh(hairlineGeo, black);
+    hairline.position.set(0, 4.25, 0.65);
+    hairline.rotation.x = -0.25;
+    playerGroup.add(hairline);
 
-    // Side hair pieces
-    const hairSideGeo = new THREE.BoxGeometry(0.3, 0.6, 0.4);
-    const hairL = new THREE.Mesh(hairSideGeo, black);
-    hairL.position.set(-1.2, 3.95, 0.4);
-    hairL.rotation.z = 0.15;
-    playerGroup.add(hairL);
-    const hairR = new THREE.Mesh(hairSideGeo, black);
-    hairR.position.set(1.2, 3.95, 0.4);
-    hairR.rotation.z = -0.15;
-    playerGroup.add(hairR);
+    // Left side hair - angular piece coming down
+    const sideHairGeo = new THREE.BoxGeometry(0.35, 0.55, 0.35);
+    const leftSideHair = new THREE.Mesh(sideHairGeo, black);
+    leftSideHair.position.set(-1.25, 3.9, 0.35);
+    leftSideHair.rotation.z = 0.2;
+    playerGroup.add(leftSideHair);
 
-    // ========== TOPKNOT - Prominent bun like reference ==========
-    // Cylindrical neck/base of topknot
-    const knotBaseGeo = new THREE.CylinderGeometry(0.18, 0.25, 0.4, 6);
+    // Right side hair
+    const rightSideHair = new THREE.Mesh(sideHairGeo, black);
+    rightSideHair.position.set(1.25, 3.9, 0.35);
+    rightSideHair.rotation.z = -0.2;
+    playerGroup.add(rightSideHair);
+
+    // Hair back coverage
+    const hairBackGeo = new THREE.SphereGeometry(1.5, 6, 4, 0, Math.PI * 2, 0, Math.PI * 0.6);
+    const hairBack = new THREE.Mesh(hairBackGeo, black);
+    hairBack.position.set(0, 3.65, -0.35);
+    hairBack.rotation.x = 0.2;
+    playerGroup.add(hairBack);
+
+    // ========== TOPKNOT - Chunky angular bun on top ==========
+    // Base/neck of topknot
+    const knotBaseGeo = new THREE.CylinderGeometry(0.2, 0.28, 0.35, 6);
     const knotBase = new THREE.Mesh(knotBaseGeo, black);
-    knotBase.position.set(0, 5.0, -0.1);
+    knotBase.position.set(0, 4.85, -0.05);
     playerGroup.add(knotBase);
 
-    // Top bun - chunky angular shape
-    const knotTopGeo = new THREE.DodecahedronGeometry(0.35, 0);
-    const knotTop = new THREE.Mesh(knotTopGeo, black);
-    knotTop.position.set(0, 5.35, -0.1);
-    knotTop.scale.set(1.2, 0.8, 1.2);
-    playerGroup.add(knotTop);
+    // Bun - faceted chunky shape
+    const knotBunGeo = new THREE.DodecahedronGeometry(0.32, 0);
+    const knotBun = new THREE.Mesh(knotBunGeo, black);
+    knotBun.position.set(0, 5.15, -0.05);
+    knotBun.scale.set(1.3, 0.85, 1.3);
+    playerGroup.add(knotBun);
 
     scene.add(playerGroup);
     return playerGroup;
