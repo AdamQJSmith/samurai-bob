@@ -403,8 +403,9 @@ function init() {
     try {
         // Setup Three.js
         scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x78b8ff);
-        scene.fog = new THREE.Fog(0x9dd3ff, 80, 220);
+        // Bright blue sky like reference
+        scene.background = new THREE.Color(0x87ceeb);
+        scene.fog = new THREE.Fog(0xa8d8ea, 60, 180);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -415,7 +416,7 @@ function init() {
         renderer.outputEncoding = THREE.sRGBEncoding;
         renderer.toneMapping = THREE.ACESFilmicToneMapping;
         renderer.toneMappingExposure = 1.05;
-        renderer.setClearColor(0x78b8ff, 1);
+        renderer.setClearColor(0x87ceeb, 1);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
         clock = new THREE.Clock();
@@ -425,14 +426,14 @@ function init() {
         return;
     }
 
-    // Lighting
-    const ambientLight = new THREE.AmbientLight(0xfff8ec, 0.4);
+    // Lighting - bright and soft like Nintendo games
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambientLight);
 
-    const hemisphereLight = new THREE.HemisphereLight(0xfffbe6, 0x2d5630, 0.5);
+    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x88cc88, 0.5);
     scene.add(hemisphereLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffe1b5, 1.0);
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
     directionalLight.position.set(50, 100, 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.left = -100;
@@ -540,63 +541,66 @@ function createArena() {
     const arenaGroup = new THREE.Group();
     arenaGroup.name = 'arenaGroup';
 
-    // Floating diorama base
-    const sideGeometry = new THREE.CylinderGeometry(ARENA_RADIUS, ARENA_RADIUS * 1.06, ARENA_HEIGHT, 64, 1, true);
-    const sideMaterial = new THREE.MeshStandardMaterial({
-        map: TEXTURES.grassSide,
-        roughness: 1.0,
-        metalness: 0.0
-    });
-    const sideMesh = new THREE.Mesh(sideGeometry, sideMaterial);
-    sideMesh.position.y = -ARENA_HEIGHT / 2;
-    sideMesh.castShadow = true;
-    sideMesh.receiveShadow = true;
-    arenaGroup.add(sideMesh);
+    // Bright green grass color matching reference
+    const grassColor = 0x5cb85c;
+    const grassDarkColor = 0x4a9f4a;
 
-    const topGeometry = new THREE.CircleGeometry(ARENA_RADIUS - 0.05, 64);
-    const topMaterial = new THREE.MeshStandardMaterial({
-        map: TEXTURES.grassTop,
-        roughness: 0.65,
+    // Main grassy platform - smooth rolling hill shape
+    const hillGeo = new THREE.SphereGeometry(ARENA_RADIUS * 1.2, 64, 64, 0, Math.PI * 2, 0, Math.PI / 2.5);
+    const hillMat = new THREE.MeshStandardMaterial({
+        color: grassColor,
+        roughness: 0.7,
         metalness: 0.0
     });
-    const topMesh = new THREE.Mesh(topGeometry, topMaterial);
+    const hill = new THREE.Mesh(hillGeo, hillMat);
+    hill.position.y = -ARENA_RADIUS * 0.3;
+    hill.receiveShadow = true;
+    hill.castShadow = true;
+    arenaGroup.add(hill);
+
+    // Grass top layer for vibrant green
+    const topGeo = new THREE.CircleGeometry(ARENA_RADIUS, 64);
+    const topMat = new THREE.MeshStandardMaterial({
+        color: grassColor,
+        roughness: 0.6,
+        metalness: 0.0
+    });
+    const topMesh = new THREE.Mesh(topGeo, topMat);
     topMesh.rotation.x = -Math.PI / 2;
-    topMesh.position.y = 0.02;
+    topMesh.position.y = 0.05;
     topMesh.receiveShadow = true;
     arenaGroup.add(topMesh);
 
-    const bottomMaterial = new THREE.MeshStandardMaterial({ color: 0x6f3b1f, roughness: 1, metalness: 0 });
-    const bottomMesh = new THREE.Mesh(topGeometry.clone(), bottomMaterial);
-    bottomMesh.rotation.x = Math.PI / 2;
-    bottomMesh.position.y = -ARENA_HEIGHT;
-    arenaGroup.add(bottomMesh);
+    // Dirt/brown underside
+    const undersideGeo = new THREE.CylinderGeometry(ARENA_RADIUS * 0.9, ARENA_RADIUS * 0.5, 4, 64);
+    const undersideMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.8, metalness: 0 });
+    const underside = new THREE.Mesh(undersideGeo, undersideMat);
+    underside.position.y = -2.5;
+    arenaGroup.add(underside);
 
-    // Soft moss fringe
-    const fringeGeometry = new THREE.TorusGeometry(ARENA_RADIUS - 0.4, 0.3, 16, 64);
-    const fringeMaterial = new THREE.MeshStandardMaterial({ color: 0x3ba94f, roughness: 0.8, metalness: 0 });
-    const fringe = new THREE.Mesh(fringeGeometry, fringeMaterial);
+    // Grass edge fringe
+    const fringeGeo = new THREE.TorusGeometry(ARENA_RADIUS - 0.3, 0.4, 16, 64);
+    const fringeMat = new THREE.MeshStandardMaterial({ color: grassDarkColor, roughness: 0.7, metalness: 0 });
+    const fringe = new THREE.Mesh(fringeGeo, fringeMat);
     fringe.rotation.x = Math.PI / 2;
-    fringe.position.y = -0.12;
-    fringe.castShadow = true;
+    fringe.position.y = -0.1;
     arenaGroup.add(fringe);
 
     arenaGroup.position.y = 0;
     scene.add(arenaGroup);
 
-    // Water ring beneath platform
-    const waterTexture = createWaterTexture();
-    const waterGeometry = new THREE.CircleGeometry(60, 64);
-    const waterMaterial = new THREE.MeshStandardMaterial({
-        map: waterTexture,
-        roughness: 0.2,
-        metalness: 0.0,
+    // Water/river below
+    const waterGeo = new THREE.PlaneGeometry(150, 150);
+    const waterMat = new THREE.MeshStandardMaterial({
+        color: 0x4a90c2,
+        roughness: 0.3,
+        metalness: 0.1,
         transparent: true,
-        opacity: 0.85
+        opacity: 0.9
     });
-    const water = new THREE.Mesh(waterGeometry, waterMaterial);
+    const water = new THREE.Mesh(waterGeo, waterMat);
     water.rotation.x = -Math.PI / 2;
-    water.position.y = -ARENA_HEIGHT - 0.25;
-    water.receiveShadow = false;
+    water.position.y = -6;
     scene.add(water);
 
     // Background hills and trees
@@ -607,62 +611,89 @@ function addBackgroundElements() {
     const backgroundGroup = new THREE.Group();
     backgroundGroup.name = 'backgroundGroup';
 
-    const hillColors = [0x7bbf5f, 0x5ea848, 0x4a8f3a];
-    for (let i = 0; i < 6; i++) {
+    // Rolling green hills in background - smooth like reference
+    const hillColors = [0x5cb85c, 0x4cae4c, 0x3d9140];
+    for (let i = 0; i < 8; i++) {
         const color = hillColors[i % hillColors.length];
-        const radius = 18 + Math.random() * 6;
-        const hillGeometry = new THREE.SphereGeometry(radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
-        const hillMaterial = new THREE.MeshStandardMaterial({
+        const radius = 25 + Math.random() * 15;
+        const hillGeo = new THREE.SphereGeometry(radius, 48, 48, 0, Math.PI * 2, 0, Math.PI / 2);
+        const hillMat = new THREE.MeshStandardMaterial({
             color: color,
-            roughness: 0.9,
+            roughness: 0.7,
             metalness: 0.0
         });
-        const hill = new THREE.Mesh(hillGeometry, hillMaterial);
-        const angle = (i / 6) * Math.PI * 2 + (Math.random() * 0.4);
-        const distance = 45 + Math.random() * 20;
-        hill.position.set(Math.cos(angle) * distance, -ARENA_HEIGHT / 2 + radius * 0.2, Math.sin(angle) * distance);
-        hill.rotation.x = Math.PI / 2;
+        const hill = new THREE.Mesh(hillGeo, hillMat);
+        const angle = (i / 8) * Math.PI * 2;
+        const distance = 50 + Math.random() * 25;
+        hill.position.set(
+            Math.cos(angle) * distance,
+            -6 + radius * 0.15,
+            Math.sin(angle) * distance
+        );
         hill.receiveShadow = false;
         backgroundGroup.add(hill);
     }
 
-    // Stylized trees
-    const treeGroup = new THREE.Group();
+    // Big smooth tree like in reference - large trunk on the right
+    const bigTreeTrunkGeo = new THREE.CylinderGeometry(2.5, 3.5, 18, 32);
+    const bigTreeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.8, metalness: 0.0 });
+    const bigTreeTrunk = new THREE.Mesh(bigTreeTrunkGeo, bigTreeTrunkMat);
+    bigTreeTrunk.position.set(20, 4, -8);
+    bigTreeTrunk.castShadow = true;
+    backgroundGroup.add(bigTreeTrunk);
+
+    // Foliage for big tree
+    const bigFoliageGeo = new THREE.SphereGeometry(8, 32, 32);
+    const bigFoliageMat = new THREE.MeshStandardMaterial({ color: 0x4cae4c, roughness: 0.6, metalness: 0.0 });
+    const bigFoliage = new THREE.Mesh(bigFoliageGeo, bigFoliageMat);
+    bigFoliage.position.set(20, 14, -8);
+    bigFoliage.castShadow = true;
+    backgroundGroup.add(bigFoliage);
+
+    // Additional smaller trees
     const treePositions = [
-        { x: 12, z: 8 },
-        { x: -14, z: -6 },
-        { x: 9, z: -13 }
+        { x: -18, z: 12, scale: 0.7 },
+        { x: -22, z: -15, scale: 0.8 },
+        { x: 15, z: 18, scale: 0.6 }
     ];
     treePositions.forEach(pos => {
-        const trunkGeometry = new THREE.CylinderGeometry(0.6, 0.8, 4, 12);
-        const trunkMaterial = new THREE.MeshStandardMaterial({ color: 0x6e412a, roughness: 0.9, metalness: 0.0 });
-        const trunk = new THREE.Mesh(trunkGeometry, trunkMaterial);
-        trunk.position.set(pos.x, ARENA_HEIGHT / 2 + 1.5, pos.z);
+        const trunkGeo = new THREE.CylinderGeometry(1.2 * pos.scale, 1.8 * pos.scale, 8 * pos.scale, 24);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.8, metalness: 0.0 });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.set(pos.x, 2 * pos.scale, pos.z);
+        trunk.castShadow = true;
+        backgroundGroup.add(trunk);
 
-        const foliageGeometry = new THREE.SphereGeometry(3.2, 16, 16);
-        const foliageMaterial = new THREE.MeshStandardMaterial({ color: 0x3ea846, roughness: 0.7, metalness: 0.0 });
-        const foliage = new THREE.Mesh(foliageGeometry, foliageMaterial);
-        foliage.position.set(pos.x, ARENA_HEIGHT / 2 + 3.8, pos.z);
+        const foliageGeo = new THREE.SphereGeometry(4 * pos.scale, 24, 24);
+        const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4cae4c, roughness: 0.6, metalness: 0.0 });
+        const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+        foliage.position.set(pos.x, 6 * pos.scale, pos.z);
         foliage.castShadow = true;
-
-        treeGroup.add(trunk);
-        treeGroup.add(foliage);
+        backgroundGroup.add(foliage);
     });
-    backgroundGroup.add(treeGroup);
 
-    // Soft clouds
-    for (let i = 0; i < 12; i++) {
-        const puff = new THREE.Mesh(
-            new THREE.SphereGeometry(2 + Math.random() * 1.5, 16, 16),
-            new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.6, metalness: 0 })
+    // Fluffy white clouds like reference
+    for (let i = 0; i < 8; i++) {
+        const cloudGroup = new THREE.Group();
+        // Each cloud is made of multiple overlapping spheres
+        const numPuffs = 3 + Math.floor(Math.random() * 3);
+        for (let j = 0; j < numPuffs; j++) {
+            const puffGeo = new THREE.SphereGeometry(3 + Math.random() * 2, 24, 24);
+            const puffMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
+            const puff = new THREE.Mesh(puffGeo, puffMat);
+            puff.position.set(
+                (j - numPuffs / 2) * 3,
+                Math.random() * 1.5,
+                Math.random() * 2
+            );
+            cloudGroup.add(puff);
+        }
+        cloudGroup.position.set(
+            (Math.random() - 0.5) * 100,
+            25 + Math.random() * 10,
+            (Math.random() - 0.5) * 100
         );
-        puff.position.set(
-            (Math.random() - 0.5) * 80,
-            20 + Math.random() * 8,
-            (Math.random() - 0.5) * 80
-        );
-        puff.castShadow = false;
-        backgroundGroup.add(puff);
+        backgroundGroup.add(cloudGroup);
     }
 
     scene.add(backgroundGroup);
@@ -674,79 +705,90 @@ function createPlayer() {
     playerGroup.name = 'samuraiBob';
 
     // LOW-POLY segments for faceted look
-    const LP = 8; // Low poly segment count
-    const MP = 12; // Medium poly
-    
-    // Colors matching the reference image EXACTLY
-    const kimonoMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x2e6ed8, flatShading: true, roughness: 0.7, metalness: 0.1 
+    const HP = 32; // High poly for smooth look
+    const MP = 24; // Medium poly
+
+    // Smooth materials matching reference image - Nintendo style
+    const kimonoMaterial = new THREE.MeshStandardMaterial({
+        color: 0x3b7dd8, roughness: 0.5, metalness: 0.0
     });
-    const skinMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xf0b888, flatShading: true, roughness: 0.8, metalness: 0 
+    const kimonoDarkMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2a5ba8, roughness: 0.5, metalness: 0.0
     });
-    const beltMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x1a1a1a, flatShading: true, roughness: 0.6, metalness: 0.1 
+    const skinMaterial = new THREE.MeshStandardMaterial({
+        color: 0xf5c9a6, roughness: 0.6, metalness: 0
     });
-    const redMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xc43030, flatShading: true, roughness: 0.7, metalness: 0 
+    const beltMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a, roughness: 0.4, metalness: 0.0
     });
-    const blueShoeMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x2850a0, flatShading: true, roughness: 0.6, metalness: 0.1 
+    const redMaterial = new THREE.MeshStandardMaterial({
+        color: 0xc43838, roughness: 0.5, metalness: 0
     });
-    const hairMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0x1a1a1a, flatShading: true, roughness: 0.5, metalness: 0.1 
+    const blueShoeMaterial = new THREE.MeshStandardMaterial({
+        color: 0x2850a0, roughness: 0.5, metalness: 0.0
     });
-    const collarMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xd0d0d0, flatShading: true, roughness: 0.6, metalness: 0 
+    const hairMaterial = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a, roughness: 0.4, metalness: 0.0
     });
-    const noseMaterial = new THREE.MeshStandardMaterial({ 
-        color: 0xe8a050, flatShading: true, roughness: 0.7, metalness: 0 
+    const collarMaterial = new THREE.MeshStandardMaterial({
+        color: 0xe8e8e8, roughness: 0.5, metalness: 0
+    });
+    const noseMaterial = new THREE.MeshStandardMaterial({
+        color: 0xdba070, roughness: 0.6, metalness: 0
     });
 
-    // BODY - blocky rounded shape (low poly sphere)
-    const bodyGeo = new THREE.SphereGeometry(1.3, LP, LP);
+    // BODY - smooth rounded shape
+    const bodyGeo = new THREE.SphereGeometry(1.3, HP, HP);
     const body = new THREE.Mesh(bodyGeo, kimonoMaterial);
     body.scale.set(1.0, 1.1, 0.85);
     body.position.y = 1.9;
     body.castShadow = true;
     playerGroup.add(body);
 
-    // V-neck collar crossing (like reference - white/gray straps)
-    const collarLeftGeo = new THREE.BoxGeometry(0.25, 1.2, 0.2);
+    // V-neck collar crossing (smooth)
+    const collarLeftGeo = new THREE.CapsuleGeometry(0.12, 0.8, 8, 16);
     const collarLeft = new THREE.Mesh(collarLeftGeo, collarMaterial);
-    collarLeft.position.set(-0.25, 2.45, 0.85);
+    collarLeft.position.set(-0.2, 2.5, 0.9);
     collarLeft.rotation.z = 0.35;
     collarLeft.rotation.x = -0.25;
     playerGroup.add(collarLeft);
-    
+
     const collarRight = new THREE.Mesh(collarLeftGeo, collarMaterial);
-    collarRight.position.set(0.25, 2.45, 0.85);
+    collarRight.position.set(0.2, 2.5, 0.9);
     collarRight.rotation.z = -0.35;
     collarRight.rotation.x = -0.25;
     playerGroup.add(collarRight);
 
+    // Dark blue trim on kimono
+    const trimGeo = new THREE.TorusGeometry(1.1, 0.08, 16, 32, Math.PI);
+    const trimLeft = new THREE.Mesh(trimGeo, kimonoDarkMaterial);
+    trimLeft.position.set(-0.3, 2.2, 0.6);
+    trimLeft.rotation.y = Math.PI / 2;
+    trimLeft.rotation.x = -0.3;
+    playerGroup.add(trimLeft);
+
     // Black belt/obi
-    const beltGeo = new THREE.CylinderGeometry(1.25, 1.25, 0.35, LP);
+    const beltGeo = new THREE.CylinderGeometry(1.2, 1.2, 0.4, HP);
     const belt = new THREE.Mesh(beltGeo, beltMaterial);
     belt.position.y = 1.35;
     playerGroup.add(belt);
 
-    // ARMS - stubby blocky (low poly capsule)
-    const armGeo = new THREE.CapsuleGeometry(0.28, 0.5, 2, LP);
+    // ARMS - smooth stubby
+    const armGeo = new THREE.CapsuleGeometry(0.3, 0.5, 8, 16);
     const leftArm = new THREE.Mesh(armGeo, kimonoMaterial);
     leftArm.position.set(-1.4, 2.0, 0.25);
     leftArm.rotation.z = Math.PI / 2.8;
     leftArm.castShadow = true;
     playerGroup.add(leftArm);
-    
+
     const rightArm = new THREE.Mesh(armGeo, kimonoMaterial);
     rightArm.position.set(1.4, 2.0, 0.25);
     rightArm.rotation.z = -Math.PI / 2.8;
     rightArm.castShadow = true;
     playerGroup.add(rightArm);
 
-    // HANDS - small blocky spheres
-    const handGeo = new THREE.SphereGeometry(0.22, LP, LP);
+    // HANDS - smooth spheres
+    const handGeo = new THREE.SphereGeometry(0.24, HP, HP);
     const leftHand = new THREE.Mesh(handGeo, skinMaterial);
     leftHand.position.set(-1.75, 1.7, 0.4);
     playerGroup.add(leftHand);
@@ -754,8 +796,8 @@ function createPlayer() {
     rightHand.position.set(1.75, 1.7, 0.4);
     playerGroup.add(rightHand);
 
-    // HEAD - big blocky sphere (low poly for faceted look)
-    const headGeo = new THREE.SphereGeometry(1.25, LP, LP);
+    // HEAD - big smooth sphere
+    const headGeo = new THREE.SphereGeometry(1.3, HP, HP);
     const head = new THREE.Mesh(headGeo, skinMaterial);
     head.position.y = 4.0;
     head.castShadow = true;
@@ -772,58 +814,56 @@ function createPlayer() {
     facePlane.position.set(0, 3.95, 1.15);
     playerGroup.add(facePlane);
 
-    // BIG NOSE - prominent round (low poly)
-    const noseGeo = new THREE.SphereGeometry(0.32, LP, LP);
+    // BIG NOSE - prominent round smooth
+    const noseGeo = new THREE.SphereGeometry(0.35, HP, HP);
     const nose = new THREE.Mesh(noseGeo, noseMaterial);
-    nose.position.set(0, 3.7, 1.25);
+    nose.position.set(0, 3.65, 1.3);
     nose.scale.set(1.0, 0.85, 0.9);
     nose.castShadow = true;
     playerGroup.add(nose);
 
-    // EARS - pointy, sticking out (like reference)
-    const earGeo = new THREE.ConeGeometry(0.2, 0.5, 4);
+    // EARS - rounded, sticking out (like reference)
+    const earGeo = new THREE.SphereGeometry(0.28, HP, HP);
     const leftEar = new THREE.Mesh(earGeo, skinMaterial);
-    leftEar.position.set(-1.2, 4.0, 0.15);
-    leftEar.rotation.z = Math.PI / 2;
-    leftEar.rotation.y = 0.3;
+    leftEar.position.set(-1.25, 3.9, 0.1);
+    leftEar.scale.set(0.4, 0.8, 0.6);
     playerGroup.add(leftEar);
     const rightEar = new THREE.Mesh(earGeo, skinMaterial);
-    rightEar.position.set(1.2, 4.0, 0.15);
-    rightEar.rotation.z = -Math.PI / 2;
-    rightEar.rotation.y = -0.3;
+    rightEar.position.set(1.25, 3.9, 0.1);
+    rightEar.scale.set(0.4, 0.8, 0.6);
     playerGroup.add(rightEar);
 
-    // HAIR - black cap wrapping around head (low poly)
-    const hairCapGeo = new THREE.SphereGeometry(1.28, LP, LP, 0, Math.PI * 2, 0, Math.PI / 2.5);
+    // HAIR - smooth black cap wrapping around head
+    const hairCapGeo = new THREE.SphereGeometry(1.35, HP, HP, 0, Math.PI * 2, 0, Math.PI / 2.2);
     const hairCap = new THREE.Mesh(hairCapGeo, hairMaterial);
-    hairCap.position.y = 4.15;
+    hairCap.position.y = 4.2;
     hairCap.rotation.x = Math.PI;
     playerGroup.add(hairCap);
-    
-    // Hair sides wrapping down (like reference - covers sides of head)
-    const hairSideGeo = new THREE.SphereGeometry(0.4, 6, 6);
+
+    // Hair sides wrapping down smoothly
+    const hairSideGeo = new THREE.SphereGeometry(0.45, HP, HP);
     const hairSideL = new THREE.Mesh(hairSideGeo, hairMaterial);
-    hairSideL.position.set(-1.0, 4.2, -0.2);
-    hairSideL.scale.set(0.7, 1.3, 0.9);
+    hairSideL.position.set(-1.0, 4.3, -0.15);
+    hairSideL.scale.set(0.6, 1.2, 0.8);
     playerGroup.add(hairSideL);
     const hairSideR = new THREE.Mesh(hairSideGeo, hairMaterial);
-    hairSideR.position.set(1.0, 4.2, -0.2);
-    hairSideR.scale.set(0.7, 1.3, 0.9);
+    hairSideR.position.set(1.0, 4.3, -0.15);
+    hairSideR.scale.set(0.6, 1.2, 0.8);
     playerGroup.add(hairSideR);
 
-    // TOPKNOT (chonmage) - blocky
-    const topKnotBaseGeo = new THREE.CylinderGeometry(0.22, 0.28, 0.35, 6);
+    // TOPKNOT (chonmage) - smooth rounded
+    const topKnotBaseGeo = new THREE.CylinderGeometry(0.2, 0.25, 0.4, HP);
     const topKnotBase = new THREE.Mesh(topKnotBaseGeo, hairMaterial);
-    topKnotBase.position.y = 5.1;
+    topKnotBase.position.y = 5.15;
     playerGroup.add(topKnotBase);
-    const topKnotGeo = new THREE.SphereGeometry(0.35, 6, 6);
+    const topKnotGeo = new THREE.SphereGeometry(0.32, HP, HP);
     const topKnot = new THREE.Mesh(topKnotGeo, hairMaterial);
-    topKnot.position.y = 5.35;
-    topKnot.scale.set(1, 0.75, 1);
+    topKnot.position.y = 5.4;
+    topKnot.scale.set(1.1, 0.8, 1.1);
     playerGroup.add(topKnot);
 
-    // LEGS - short stubby red (low poly)
-    const legGeo = new THREE.CapsuleGeometry(0.35, 0.5, 2, LP);
+    // LEGS - short stubby red smooth
+    const legGeo = new THREE.CapsuleGeometry(0.38, 0.45, 8, 16);
     const leftLeg = new THREE.Mesh(legGeo, redMaterial);
     leftLeg.position.set(-0.5, 0.7, 0.05);
     playerGroup.add(leftLeg);
@@ -831,8 +871,8 @@ function createPlayer() {
     rightLeg.position.set(0.5, 0.7, 0.05);
     playerGroup.add(rightLeg);
 
-    // FEET - blue rounded shoes (like reference!)
-    const footGeo = new THREE.SphereGeometry(0.32, LP, LP);
+    // FEET - blue rounded shoes smooth
+    const footGeo = new THREE.SphereGeometry(0.35, HP, HP);
     const leftFoot = new THREE.Mesh(footGeo, blueShoeMaterial);
     leftFoot.position.set(-0.5, 0.2, 0.3);
     leftFoot.scale.set(1.2, 0.5, 1.4);
@@ -844,21 +884,21 @@ function createPlayer() {
     rightFoot.castShadow = true;
     playerGroup.add(rightFoot);
 
-    // SWORD (on back)
+    // SWORD (on back) - smooth
     const swordGroup = new THREE.Group();
     const bladeGeo = new THREE.BoxGeometry(0.06, 2.0, 0.12);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 0.8, roughness: 0.2, flatShading: true });
+    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xe8e8e8, metalness: 0.6, roughness: 0.2 });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
     blade.position.y = 1.0;
     swordGroup.add(blade);
-    const guardGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.06, 6);
-    const guardMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, flatShading: true });
+    const guardGeo = new THREE.CylinderGeometry(0.22, 0.22, 0.06, HP);
+    const guardMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.6 });
     const guard = new THREE.Mesh(guardGeo, guardMat);
     guard.rotation.x = Math.PI / 2;
     guard.position.y = 0.25;
     swordGroup.add(guard);
-    const handleGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.5, 6);
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, flatShading: true });
+    const handleGeo = new THREE.CylinderGeometry(0.1, 0.1, 0.5, HP);
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x2a1a10, roughness: 0.7 });
     const handle = new THREE.Mesh(handleGeo, handleMat);
     swordGroup.add(handle);
     swordGroup.position.set(0, 1.7, -1.1);
@@ -867,40 +907,39 @@ function createPlayer() {
     playerGroup.add(swordGroup);
     playerGroup.userData.sword = swordGroup;
 
-    // SHIELD - held in front/side (low poly, matching reference)
+    // SHIELD - round wooden with cherry blossom (smooth, matching reference)
     const shieldGroup = new THREE.Group();
-    
-    // Gray metal rim (low poly torus)
-    const rimGeo = new THREE.TorusGeometry(0.9, 0.12, 6, MP);
-    const rimMat = new THREE.MeshStandardMaterial({ color: 0x707070, metalness: 0.7, roughness: 0.3, flatShading: true });
+
+    // Gray metal rim (smooth)
+    const rimGeo = new THREE.TorusGeometry(1.0, 0.12, 16, 48);
+    const rimMat = new THREE.MeshStandardMaterial({ color: 0x808080, metalness: 0.5, roughness: 0.4 });
     const rim = new THREE.Mesh(rimGeo, rimMat);
     shieldGroup.add(rim);
-    
-    // Wooden shield face with flower
-    const shieldFaceGeo = new THREE.CircleGeometry(0.85, MP);
+
+    // Wooden shield face with flower texture
+    const shieldFaceGeo = new THREE.CircleGeometry(0.95, 48);
     const shieldFaceMat = new THREE.MeshStandardMaterial({
         map: createShieldTexture(),
-        roughness: 0.6,
-        metalness: 0.1,
-        flatShading: true
+        roughness: 0.5,
+        metalness: 0.0
     });
     const shieldFace = new THREE.Mesh(shieldFaceGeo, shieldFaceMat);
     shieldFace.position.z = 0.04;
     shieldFace.castShadow = true;
     shieldGroup.add(shieldFace);
-    
+
     // Shield back (wood)
-    const shieldBackGeo = new THREE.CircleGeometry(0.85, MP);
-    const shieldBackMat = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.8, flatShading: true });
+    const shieldBackGeo = new THREE.CircleGeometry(0.95, 48);
+    const shieldBackMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.7 });
     const shieldBack = new THREE.Mesh(shieldBackGeo, shieldBackMat);
     shieldBack.position.z = -0.04;
     shieldBack.rotation.y = Math.PI;
     shieldGroup.add(shieldBack);
-    
-    // Position like reference - held to the left side, angled
-    shieldGroup.position.set(-1.5, 1.5, 1.0);
-    shieldGroup.rotation.y = 0.4;
-    shieldGroup.rotation.x = 0.1;
+
+    // Position like reference - held to the left side
+    shieldGroup.position.set(-1.6, 1.5, 0.8);
+    shieldGroup.rotation.y = 0.3;
+    shieldGroup.rotation.x = 0.05;
     shieldGroup.visible = true;
     playerGroup.add(shieldGroup);
     playerGroup.userData.shield = shieldGroup;
