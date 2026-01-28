@@ -1421,12 +1421,14 @@ function updatePlayer() {
     // === ANIMATE LEFT ARM (shield arm) ===
     if (player.userData.leftArm) {
         if (playerStats.isBlocking) {
-            // Raise left arm with shield in front
-            player.userData.leftArm.rotation.x = -0.8;
-            player.userData.leftArm.rotation.z = 0.5;
+            // Bring arm across body - shield raised in front defensively
+            player.userData.leftArm.rotation.x = -1.4;  // Raise arm up high
+            player.userData.leftArm.rotation.y = 1.2;   // Swing across to center of body
+            player.userData.leftArm.rotation.z = 0.6;   // Angle shield to face forward
         } else {
-            // Relaxed position
+            // Relaxed position at side
             player.userData.leftArm.rotation.x = 0;
+            player.userData.leftArm.rotation.y = 0;
             player.userData.leftArm.rotation.z = 0;
         }
     }
