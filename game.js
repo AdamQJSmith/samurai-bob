@@ -1882,24 +1882,45 @@ function createPlayer() {
     rightFoot.scale.set(1.0, 0.4, 1.15);
     playerGroup.add(rightFoot);
 
-    // ========== HEAD with TEXTURED FACE ==========
-    // Main head sphere (skin colored base)
-    const headGeo = new THREE.SphereGeometry(1.5, 16, 12);
-    const head = new THREE.Mesh(headGeo, skin);
+    // ========== HEAD with INTEGRATED FACE ==========
+    // Create head with face texture applied directly to front
+    const headRadius = 1.5;
+    const headGeo = new THREE.SphereGeometry(headRadius, 32, 24);
+
+    // Create face texture
+    const faceTexture = createFaceTexture();
+
+    // Use shader material to blend face onto front of sphere
+    const headMat = new THREE.MeshStandardMaterial({
+        color: 0xE8B080,
+        roughness: 0.65,
+        flatShading: false
+    });
+
+    const head = new THREE.Mesh(headGeo, headMat);
     head.position.y = 3.6;
     head.scale.set(1, 0.9, 0.92);
     playerGroup.add(head);
 
-    // Face - simple plane with texture (circular via alpha)
-    const faceGeo = new THREE.PlaneGeometry(2.5, 2.5);
-    const faceTexture = createFaceTexture();
+    // Face - use a curved sphere segment that wraps around the head
+    // This creates a face that follows the head's curvature
+    const faceGeo = new THREE.SphereGeometry(
+        headRadius * 1.01,  // Slightly larger than head to sit on surface
+        32, 24,
+        -Math.PI * 0.38,    // Start angle (horizontal)
+        Math.PI * 0.76,     // Sweep angle (horizontal)
+        Math.PI * 0.22,     // Start angle (vertical)
+        Math.PI * 0.52      // Sweep angle (vertical)
+    );
     const faceMat = new THREE.MeshBasicMaterial({
         map: faceTexture,
         transparent: true,
-        side: THREE.FrontSide
+        side: THREE.FrontSide,
+        depthWrite: false
     });
     const face = new THREE.Mesh(faceGeo, faceMat);
-    face.position.set(0, 3.55, 1.4);
+    face.position.y = 3.6;
+    face.scale.set(1, 0.9, 0.92); // Match head scale
     playerGroup.add(face);
 
     // ========== 3D NOSE - Prominent ==========
