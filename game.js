@@ -4894,17 +4894,21 @@ function damageEnemy(enemy, damage, fromPlayer = true) {
 
     // Flash enemy WHITE for impact (not red)
     enemy.children.forEach(child => {
-        if (child.material) {
+        if (child.material && child.material.color) {
             const originalColor = child.material.color.clone();
             child.material.color.setHex(0xffffff);
-            child.material.emissive = new THREE.Color(0xffffff);
-            child.material.emissiveIntensity = 0.5;
+            if (child.material.emissive) {
+                child.material.emissive.setHex(0xffffff);
+                child.material.emissiveIntensity = 0.5;
+            }
 
             setTimeout(() => {
-                if (child.material) {
-                    child.material.color = originalColor;
-                    child.material.emissive = new THREE.Color(0x000000);
-                    child.material.emissiveIntensity = 0;
+                if (child.material && child.material.color) {
+                    child.material.color.copy(originalColor);
+                    if (child.material.emissive) {
+                        child.material.emissive.setHex(0x000000);
+                        child.material.emissiveIntensity = 0;
+                    }
                 }
             }, 100);
         }

@@ -296,6 +296,7 @@ body {
     cursor: pointer;
     transition: all 0.2s ease;
     color: white;
+    pointer-events: auto;
 }
 
 .sound-btn:hover {
