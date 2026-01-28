@@ -108,6 +108,28 @@ This is the **3D version** of Samurai Bob, built to match the low-poly aesthetic
 
 The `2d-version/` folder contains the original 2D prototype.
 
+## ☁️ Quick Hosting (Shopify Internal)
+
+This project can be hosted on Shopify Quick, which serves static files for Shopifolk only.
+
+### Install Quick CLI
+
+`npm i -g @shopify/quick`
+
+### Local dev
+
+`quick init`
+
+`quick serve`
+
+### Deploy
+
+Deploy from the repo root. The directory must include `index.html`.
+
+`quick deploy -f . samurai-bob-3d`
+
+Live URL format: `https://samurai-bob-3d.quick.shopify.io`
+
 ---
 
 **Have fun, Samurai Bob!** ⚔️🛡️
