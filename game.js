@@ -1315,6 +1315,10 @@ function setupCameraControls() {
 
     // Track mouse button state globally
     document.addEventListener('mousedown', (e) => {
+        // Ignore clicks on UI buttons (like sound toggle)
+        if (e.target.closest('.sound-btn') || e.target.closest('.menu-button') || e.target.closest('.game-button')) {
+            return;
+        }
         mouseDown[e.button] = true;
         if (gameState === 'playing' && e.button === 0) {
             // In leaf form, queue the attack to be processed in update loop
