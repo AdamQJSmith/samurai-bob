@@ -10,6 +10,9 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- SOUND TOGGLE - Always visible during gameplay -->
+    <button id="sound-toggle" class="sound-btn" style="display:none;" onclick="window.toggleSound()">🔊</button>
+
     <!-- Title Screen -->
     <div id="title-screen" class="screen">
         <div class="title-content">
@@ -116,9 +119,6 @@
                 </div>
             </div>
         </div>
-
-        <!-- Sound Toggle Button - Outside HUD for guaranteed clickability -->
-        <button id="sound-toggle" class="sound-btn" onclick="window.toggleSound()">🔊</button>
 
         <!-- Crosshair -->
         <div id="crosshair"></div>

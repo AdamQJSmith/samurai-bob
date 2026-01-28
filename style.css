@@ -278,22 +278,27 @@ body {
     border-radius: 5px;
 }
 
-/* Sound Button - Fixed position, outside HUD */
+/* Sound Button - Fixed position, bottom-right corner */
 .sound-btn {
-    position: fixed;
-    bottom: 20px;
-    left: 20px;
-    z-index: 9999;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.5);
-    background: rgba(0,0,0,0.7);
-    font-size: 24px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-    color: white;
-    pointer-events: auto;
+    position: fixed !important;
+    bottom: 100px !important;
+    right: 20px !important;
+    left: auto !important;
+    z-index: 99999 !important;
+    width: 60px !important;
+    height: 60px !important;
+    border-radius: 50% !important;
+    border: 3px solid #fff !important;
+    background: rgba(0,0,0,0.85) !important;
+    font-size: 28px !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    color: white !important;
+    pointer-events: auto !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5) !important;
 }
 
 .sound-btn:hover {
@@ -303,8 +308,9 @@ body {
 }
 
 .sound-btn.muted {
-    opacity: 0.7;
-    border-color: rgba(255,100,100,0.6);
+    opacity: 0.8 !important;
+    border-color: #ff4444 !important;
+    background: rgba(80,0,0,0.85) !important;
 }
 
 /* Ability HUD */

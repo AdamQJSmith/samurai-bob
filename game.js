@@ -3059,6 +3059,20 @@ function startGame() {
     document.getElementById('gameover-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
 
+    // Show sound toggle button
+    const soundBtn = document.getElementById('sound-toggle');
+    if (soundBtn) {
+        soundBtn.style.display = 'flex';
+        // Update button state based on current audio state
+        const isMuted = audioManager && audioManager.muted;
+        soundBtn.textContent = isMuted ? '🔇' : '🔊';
+        if (isMuted) {
+            soundBtn.classList.add('muted');
+        } else {
+            soundBtn.classList.remove('muted');
+        }
+    }
+
     // Prepare pointer lock for mouse look (user can click canvas to lock)
     if (renderer && renderer.domElement) {
         const canvas = renderer.domElement;
@@ -5324,6 +5338,12 @@ function gameOver() {
 
     document.getElementById('game-screen').classList.add('hidden');
     document.getElementById('gameover-screen').classList.remove('hidden');
+
+    // Hide sound toggle button
+    const soundBtn = document.getElementById('sound-toggle');
+    if (soundBtn) {
+        soundBtn.style.display = 'none';
+    }
 
     // Exit pointer lock
     if (document.exitPointerLock) {
