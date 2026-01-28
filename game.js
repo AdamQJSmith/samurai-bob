@@ -403,9 +403,9 @@ function init() {
     try {
         // Setup Three.js
         scene = new THREE.Scene();
-        // Bright blue sky like reference
-        scene.background = new THREE.Color(0x87ceeb);
-        scene.fog = new THREE.Fog(0xa8d8ea, 60, 180);
+        // Blue sky - not too bright
+        scene.background = new THREE.Color(0x7ec8e3);
+        scene.fog = new THREE.Fog(0x9dd3e8, 80, 200);
 
         camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         
@@ -426,14 +426,14 @@ function init() {
         return;
     }
 
-    // Lighting - bright and soft like Nintendo games
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+    // Lighting - soft and balanced
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
 
-    const hemisphereLight = new THREE.HemisphereLight(0xffffff, 0x88cc88, 0.5);
+    const hemisphereLight = new THREE.HemisphereLight(0xffeedd, 0x88aa88, 0.4);
     scene.add(hemisphereLight);
 
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const directionalLight = new THREE.DirectionalLight(0xfff5e6, 0.7);
     directionalLight.position.set(50, 100, 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.camera.left = -100;
@@ -541,66 +541,57 @@ function createArena() {
     const arenaGroup = new THREE.Group();
     arenaGroup.name = 'arenaGroup';
 
-    // Bright green grass color matching reference
-    const grassColor = 0x5cb85c;
-    const grassDarkColor = 0x4a9f4a;
+    // Green grass matching reference - not too bright
+    const grassColor = 0x4a9f4a;
 
-    // Main grassy platform - smooth rolling hill shape
-    const hillGeo = new THREE.SphereGeometry(ARENA_RADIUS * 1.2, 64, 64, 0, Math.PI * 2, 0, Math.PI / 2.5);
-    const hillMat = new THREE.MeshStandardMaterial({
-        color: grassColor,
-        roughness: 0.7,
-        metalness: 0.0
-    });
-    const hill = new THREE.Mesh(hillGeo, hillMat);
-    hill.position.y = -ARENA_RADIUS * 0.3;
-    hill.receiveShadow = true;
-    hill.castShadow = true;
-    arenaGroup.add(hill);
-
-    // Grass top layer for vibrant green
+    // Flat grass top - simple and clean
     const topGeo = new THREE.CircleGeometry(ARENA_RADIUS, 64);
     const topMat = new THREE.MeshStandardMaterial({
         color: grassColor,
-        roughness: 0.6,
+        roughness: 0.8,
         metalness: 0.0
     });
     const topMesh = new THREE.Mesh(topGeo, topMat);
     topMesh.rotation.x = -Math.PI / 2;
-    topMesh.position.y = 0.05;
+    topMesh.position.y = 0.02;
     topMesh.receiveShadow = true;
     arenaGroup.add(topMesh);
 
-    // Dirt/brown underside
-    const undersideGeo = new THREE.CylinderGeometry(ARENA_RADIUS * 0.9, ARENA_RADIUS * 0.5, 4, 64);
-    const undersideMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.8, metalness: 0 });
-    const underside = new THREE.Mesh(undersideGeo, undersideMat);
-    underside.position.y = -2.5;
-    arenaGroup.add(underside);
+    // Curved sides going DOWN (floating island style like reference)
+    const sideGeo = new THREE.CylinderGeometry(ARENA_RADIUS, ARENA_RADIUS * 0.7, 3, 64, 1, true);
+    const sideMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.9, metalness: 0 });
+    const sideMesh = new THREE.Mesh(sideGeo, sideMat);
+    sideMesh.position.y = -1.5;
+    arenaGroup.add(sideMesh);
 
-    // Grass edge fringe
-    const fringeGeo = new THREE.TorusGeometry(ARENA_RADIUS - 0.3, 0.4, 16, 64);
-    const fringeMat = new THREE.MeshStandardMaterial({ color: grassDarkColor, roughness: 0.7, metalness: 0 });
-    const fringe = new THREE.Mesh(fringeGeo, fringeMat);
-    fringe.rotation.x = Math.PI / 2;
-    fringe.position.y = -0.1;
-    arenaGroup.add(fringe);
+    // Bottom cap
+    const bottomGeo = new THREE.CircleGeometry(ARENA_RADIUS * 0.7, 64);
+    const bottomMat = new THREE.MeshStandardMaterial({ color: 0x6b4a32, roughness: 0.9, metalness: 0 });
+    const bottomMesh = new THREE.Mesh(bottomGeo, bottomMat);
+    bottomMesh.rotation.x = Math.PI / 2;
+    bottomMesh.position.y = -3;
+    arenaGroup.add(bottomMesh);
 
-    arenaGroup.position.y = 0;
+    // Grass edge - soft rounded edge
+    const edgeGeo = new THREE.TorusGeometry(ARENA_RADIUS - 0.2, 0.35, 16, 64);
+    const edgeMat = new THREE.MeshStandardMaterial({ color: 0x3d8b3d, roughness: 0.8, metalness: 0 });
+    const edge = new THREE.Mesh(edgeGeo, edgeMat);
+    edge.rotation.x = Math.PI / 2;
+    edge.position.y = -0.1;
+    arenaGroup.add(edge);
+
     scene.add(arenaGroup);
 
-    // Water/river below
-    const waterGeo = new THREE.PlaneGeometry(150, 150);
+    // Water below
+    const waterGeo = new THREE.PlaneGeometry(200, 200);
     const waterMat = new THREE.MeshStandardMaterial({
-        color: 0x4a90c2,
-        roughness: 0.3,
-        metalness: 0.1,
-        transparent: true,
-        opacity: 0.9
+        color: 0x5a9fd4,
+        roughness: 0.4,
+        metalness: 0.1
     });
     const water = new THREE.Mesh(waterGeo, waterMat);
     water.rotation.x = -Math.PI / 2;
-    water.position.y = -6;
+    water.position.y = -8;
     scene.add(water);
 
     // Background hills and trees
@@ -611,89 +602,53 @@ function addBackgroundElements() {
     const backgroundGroup = new THREE.Group();
     backgroundGroup.name = 'backgroundGroup';
 
-    // Rolling green hills in background - smooth like reference
-    const hillColors = [0x5cb85c, 0x4cae4c, 0x3d9140];
-    for (let i = 0; i < 8; i++) {
-        const color = hillColors[i % hillColors.length];
-        const radius = 25 + Math.random() * 15;
-        const hillGeo = new THREE.SphereGeometry(radius, 48, 48, 0, Math.PI * 2, 0, Math.PI / 2);
+    // Rolling green hills in background
+    const hillColor = 0x4a9a4a;
+    for (let i = 0; i < 6; i++) {
+        const radius = 20 + Math.random() * 10;
+        const hillGeo = new THREE.SphereGeometry(radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
         const hillMat = new THREE.MeshStandardMaterial({
-            color: color,
-            roughness: 0.7,
+            color: hillColor,
+            roughness: 0.8,
             metalness: 0.0
         });
         const hill = new THREE.Mesh(hillGeo, hillMat);
-        const angle = (i / 8) * Math.PI * 2;
-        const distance = 50 + Math.random() * 25;
+        const angle = (i / 6) * Math.PI * 2;
+        const distance = 55 + Math.random() * 20;
         hill.position.set(
             Math.cos(angle) * distance,
-            -6 + radius * 0.15,
+            -8,
             Math.sin(angle) * distance
         );
-        hill.receiveShadow = false;
         backgroundGroup.add(hill);
     }
 
-    // Big smooth tree like in reference - large trunk on the right
-    const bigTreeTrunkGeo = new THREE.CylinderGeometry(2.5, 3.5, 18, 32);
-    const bigTreeTrunkMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.8, metalness: 0.0 });
-    const bigTreeTrunk = new THREE.Mesh(bigTreeTrunkGeo, bigTreeTrunkMat);
-    bigTreeTrunk.position.set(20, 4, -8);
-    bigTreeTrunk.castShadow = true;
-    backgroundGroup.add(bigTreeTrunk);
+    // Large tree trunk on the right like reference
+    const trunkGeo = new THREE.CylinderGeometry(3, 4, 20, 32);
+    const trunkMat = new THREE.MeshStandardMaterial({ color: 0x7a5c3a, roughness: 0.9, metalness: 0.0 });
+    const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+    trunk.position.set(22, 5, -5);
+    backgroundGroup.add(trunk);
 
-    // Foliage for big tree
-    const bigFoliageGeo = new THREE.SphereGeometry(8, 32, 32);
-    const bigFoliageMat = new THREE.MeshStandardMaterial({ color: 0x4cae4c, roughness: 0.6, metalness: 0.0 });
-    const bigFoliage = new THREE.Mesh(bigFoliageGeo, bigFoliageMat);
-    bigFoliage.position.set(20, 14, -8);
-    bigFoliage.castShadow = true;
-    backgroundGroup.add(bigFoliage);
+    // Tree foliage
+    const foliageGeo = new THREE.SphereGeometry(9, 32, 32);
+    const foliageMat = new THREE.MeshStandardMaterial({ color: 0x3d8b3d, roughness: 0.7, metalness: 0.0 });
+    const foliage = new THREE.Mesh(foliageGeo, foliageMat);
+    foliage.position.set(22, 18, -5);
+    backgroundGroup.add(foliage);
 
-    // Additional smaller trees
-    const treePositions = [
-        { x: -18, z: 12, scale: 0.7 },
-        { x: -22, z: -15, scale: 0.8 },
-        { x: 15, z: 18, scale: 0.6 }
-    ];
-    treePositions.forEach(pos => {
-        const trunkGeo = new THREE.CylinderGeometry(1.2 * pos.scale, 1.8 * pos.scale, 8 * pos.scale, 24);
-        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8b6b4a, roughness: 0.8, metalness: 0.0 });
-        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
-        trunk.position.set(pos.x, 2 * pos.scale, pos.z);
-        trunk.castShadow = true;
-        backgroundGroup.add(trunk);
-
-        const foliageGeo = new THREE.SphereGeometry(4 * pos.scale, 24, 24);
-        const foliageMat = new THREE.MeshStandardMaterial({ color: 0x4cae4c, roughness: 0.6, metalness: 0.0 });
-        const foliage = new THREE.Mesh(foliageGeo, foliageMat);
-        foliage.position.set(pos.x, 6 * pos.scale, pos.z);
-        foliage.castShadow = true;
-        backgroundGroup.add(foliage);
-    });
-
-    // Fluffy white clouds like reference
-    for (let i = 0; i < 8; i++) {
-        const cloudGroup = new THREE.Group();
-        // Each cloud is made of multiple overlapping spheres
-        const numPuffs = 3 + Math.floor(Math.random() * 3);
-        for (let j = 0; j < numPuffs; j++) {
-            const puffGeo = new THREE.SphereGeometry(3 + Math.random() * 2, 24, 24);
-            const puffMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0 });
-            const puff = new THREE.Mesh(puffGeo, puffMat);
-            puff.position.set(
-                (j - numPuffs / 2) * 3,
-                Math.random() * 1.5,
-                Math.random() * 2
-            );
-            cloudGroup.add(puff);
-        }
-        cloudGroup.position.set(
-            (Math.random() - 0.5) * 100,
-            25 + Math.random() * 10,
-            (Math.random() - 0.5) * 100
+    // Simple white clouds
+    for (let i = 0; i < 6; i++) {
+        const cloudGeo = new THREE.SphereGeometry(4 + Math.random() * 3, 16, 16);
+        const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 1, metalness: 0 });
+        const cloud = new THREE.Mesh(cloudGeo, cloudMat);
+        cloud.position.set(
+            (Math.random() - 0.5) * 120,
+            25 + Math.random() * 8,
+            (Math.random() - 0.5) * 120
         );
-        backgroundGroup.add(cloudGroup);
+        cloud.scale.set(2, 0.8, 1);
+        backgroundGroup.add(cloud);
     }
 
     scene.add(backgroundGroup);
