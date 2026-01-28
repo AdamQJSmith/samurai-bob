@@ -1435,15 +1435,17 @@ function updatePlayer() {
     const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
     playerStats.isBlocking = wantsBlock;
 
-    // === ANIMATE LEFT ARM (whole arm swings to block) ===
+    // === ANIMATE LEFT ARM - move to block position ===
     if (player.userData.leftArm) {
         if (playerStats.isBlocking) {
-            // Swing whole arm inward and up - shield moves to center front
-            player.userData.leftArm.rotation.x = -0.3;  // Tilt up slightly
-            player.userData.leftArm.rotation.y = 1.2;   // Swing inward to center
-            player.userData.leftArm.rotation.z = 0.2;   // Slight roll
+            // MOVE arm to front of body and rotate shield to face forward
+            player.userData.leftArm.position.set(0, 2.0, 0.8);  // Center front
+            player.userData.leftArm.rotation.x = 0;
+            player.userData.leftArm.rotation.y = 0;
+            player.userData.leftArm.rotation.z = 0;
         } else {
-            // Resting position - arm at side
+            // Resting position - arm at left side
+            player.userData.leftArm.position.set(-1.0, 2.0, 0.2);
             player.userData.leftArm.rotation.x = 0;
             player.userData.leftArm.rotation.y = 0;
             player.userData.leftArm.rotation.z = 0;
