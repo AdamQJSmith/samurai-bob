@@ -3666,11 +3666,13 @@ function updateLeafForm() {
     // Invincible in leaf form - no damage taken
 
     // Attack with leaf swoosh - stays in leaf form
-    const attackPressed = keys['j'] || keys['e'] || mouseDown[0] || playerStats.leafAttackQueued;
+    // SPACE, J, E, or mouse click triggers leaf attack
+    const attackPressed = keys[' '] || keys['j'] || keys['e'] || mouseDown[0] || playerStats.leafAttackQueued;
     if (attackPressed && playerStats.attackCooldown <= 0) {
         leafSwooshAttack();
         mouseDown[0] = false;
         playerStats.leafAttackQueued = false;
+        keys[' '] = false; // Consume the space press so it doesn't also trigger jump
     }
 }
 
