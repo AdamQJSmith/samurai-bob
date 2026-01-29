@@ -1,3 +1,19 @@
+# Samurai Bob 3D
+
+**Live URL:** https://samurai-bob-3d.quick.shopify.io/
+
+When the user asks to "load it up", "open it", "run it", or similar, open the live Quick site in their browser:
+```bash
+open https://samurai-bob-3d.quick.shopify.io/
+```
+
+To deploy changes:
+```bash
+quick deploy . samurai-bob-3d
+```
+
+---
+
 # Quick
 
 [Quick](https://quick.shopify.io) is a tool at Shopify for quickly hosting static sites.
