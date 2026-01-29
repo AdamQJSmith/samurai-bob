@@ -36,15 +36,46 @@
             </h1>
             <p class="subtitle">⚔️ Choose Your Mode ⚔️</p>
             <div class="menu-buttons">
-                <button id="battle-royale-button" class="menu-button disabled" data-ready="false" onclick="window.requestSamuraiStartGame && window.requestSamuraiStartGame();">🎯 BATTLE ROYALE</button>
-                <button id="campaign-button" class="menu-button disabled">📖 CAMPAIGN<br><span class="coming-soon">(Coming Soon)</span></button>
-                <button id="settings-button" class="menu-button">⚙️ SETTINGS</button>
+                <button id="battle-royale-button" class="menu-button disabled" data-ready="false" tabindex="-1" onclick="window.onBattleRoyaleClick && window.onBattleRoyaleClick();">🎯 BATTLE ROYALE</button>
+                <button id="campaign-button" class="menu-button disabled" tabindex="-1">📖 CAMPAIGN<br><span class="coming-soon">(Coming Soon)</span></button>
+                <button id="settings-button" class="menu-button" tabindex="-1">⚙️ SETTINGS</button>
             </div>
             <div class="controls-info">
                 <h3>Battle Royale Controls:</h3>
-                <p><strong>WASD</strong> - Move | <strong>SPACE</strong> - Jump</p>
-                <p><strong>LEFT CLICK</strong> - Sword | <strong>RIGHT CLICK</strong> - Shield</p>
+                <p><strong>WASD</strong> - Move | <strong>SPACE / CLICK</strong> - Attack</p>
+                <p><strong>SHIFT</strong> - Block | <strong>1 2 3</strong> - Abilities</p>
             </div>
+        </div>
+    </div>
+
+    <!-- New Game or Continue Prompt -->
+    <div id="newgame-prompt" class="screen hidden">
+        <div class="prompt-content">
+            <h1>🎯 BATTLE ROYALE</h1>
+            <div class="prompt-buttons">
+                <button class="menu-button" tabindex="-1" onclick="window.startNewGame && window.startNewGame();">🆕 NEW GAME</button>
+                <button class="menu-button continue-btn" tabindex="-1" onclick="window.showSaveSlots && window.showSaveSlots();">▶️ CONTINUE</button>
+            </div>
+            <button class="back-link" tabindex="-1" onclick="window.hideNewGamePrompt && window.hideNewGamePrompt();">⬅️ Back</button>
+        </div>
+    </div>
+
+    <!-- Save Slots Screen -->
+    <div id="saves-screen" class="screen hidden">
+        <div class="saves-content">
+            <h1>📂 SAVED GAMES</h1>
+            <div id="save-slots-list" class="save-slots-list"></div>
+            <button id="back-to-prompt" class="menu-button" tabindex="-1" onclick="window.backToPrompt && window.backToPrompt();">⬅️ BACK</button>
+        </div>
+    </div>
+
+    <!-- Replace Save Screen (when 20 saves exist) -->
+    <div id="replace-save-screen" class="screen hidden">
+        <div class="saves-content">
+            <h1>💾 REPLACE SAVE</h1>
+            <p class="replace-hint">You have 20 saves. Choose one to replace:</p>
+            <div id="replace-slots-list" class="save-slots-list"></div>
+            <button id="cancel-replace" class="menu-button" onclick="window.cancelReplaceSave && window.cancelReplaceSave();">❌ CANCEL</button>
         </div>
     </div>
 
@@ -125,6 +156,19 @@
 
         <!-- 3D Canvas -->
         <div id="canvas-container"></div>
+
+        <!-- Pause Menu -->
+        <div id="pause-menu" class="pause-overlay hidden">
+            <div class="pause-content">
+                <h1>PAUSED</h1>
+                <div class="pause-buttons">
+                    <button id="pause-continue" class="pause-button selected">Continue</button>
+                    <button id="pause-save-exit" class="pause-button">Save & Exit</button>
+                    <button id="pause-exit" class="pause-button">Exit</button>
+                </div>
+                <p class="pause-hint">Press ENTER or W/S to navigate</p>
+            </div>
+        </div>
     </div>
 
     <!-- Game Over Screen -->
@@ -147,56 +191,97 @@
     <script src="vendor/three.min.js"></script>
     <script>
         (function() {
+            // Mini "e" button - always visible
+            const miniBtn = document.createElement('div');
+            miniBtn.id = 'samurai-debug-mini';
+            miniBtn.textContent = 'e';
+            miniBtn.title = 'Click to view logs';
+            miniBtn.style.cssText = 'display:flex; position:fixed; bottom:12px; left:12px; width:24px; height:24px; background:rgba(80,80,80,0.7); border-radius:50%; cursor:pointer; z-index:99999; align-items:center; justify-content:center; font-weight:bold; color:#ccc; font-size:12px; font-family:monospace; transition:all 0.2s;';
+            miniBtn.onmouseenter = function() { miniBtn.style.background = 'rgba(100,100,100,0.9)'; };
+            miniBtn.onmouseleave = function() { miniBtn.style.background = hasErrors ? '#ff4444' : 'rgba(80,80,80,0.7)'; };
+            document.body.appendChild(miniBtn);
+
+            // Full log panel
             const logContainer = document.createElement('div');
             logContainer.id = 'samurai-debug-log';
-            logContainer.style.position = 'fixed';
-            logContainer.style.bottom = '20px';
-            logContainer.style.left = '20px';
-            logContainer.style.maxWidth = '320px';
-            logContainer.style.maxHeight = '240px';
-            logContainer.style.overflow = 'auto';
-            logContainer.style.padding = '12px';
-            logContainer.style.background = 'rgba(0, 0, 0, 0.75)';
-            logContainer.style.color = '#fff';
-            logContainer.style.fontFamily = 'monospace';
-            logContainer.style.fontSize = '12px';
-            logContainer.style.borderRadius = '8px';
-            logContainer.style.zIndex = '9999';
-            logContainer.style.pointerEvents = 'none';
-            logContainer.style.display = 'none';
+            logContainer.style.cssText = 'display:none; position:fixed; bottom:12px; left:12px; width:420px; max-height:240px; background:rgba(20,20,20,0.95); border:1px solid #444; border-radius:8px; z-index:99999; overflow:hidden; font-family:monospace; font-size:11px;';
+
+            const header = document.createElement('div');
+            header.style.cssText = 'display:flex; justify-content:space-between; align-items:center; padding:6px 10px; background:#333; color:#aaa;';
+            header.innerHTML = '<span style="font-size:10px;">📋 Console</span><div><button id="copy-log-btn" style="background:#555;color:#fff;border:none;padding:3px 8px;border-radius:3px;cursor:pointer;font-size:10px;margin-right:6px;">Copy</button><button id="min-log-btn" style="background:transparent;color:#aaa;border:none;cursor:pointer;font-size:14px;">−</button></div>';
+            logContainer.appendChild(header);
+
+            const logContent = document.createElement('div');
+            logContent.id = 'samurai-log-content';
+            logContent.style.cssText = 'padding:8px; color:#bbb; overflow-y:auto; max-height:190px; white-space:pre-wrap; word-break:break-all; font-size:10px; line-height:1.4;';
+            logContainer.appendChild(logContent);
             document.body.appendChild(logContainer);
 
-            window.__samuraiLog = function(message, isError) {
+            const logs = [];
+            let hasErrors = false;
+
+            function updateLogDisplay() {
+                logContent.innerHTML = logs.map(function(l) {
+                    if (l.includes('ERROR') || l.includes('error')) return '<div style="color:#ff6b6b;">' + l + '</div>';
+                    if (l.includes('WARN') || l.includes('warn')) return '<div style="color:#f0ad4e;">' + l + '</div>';
+                    return '<div>' + l + '</div>';
+                }).join('');
+                logContent.scrollTop = logContent.scrollHeight;
+            }
+
+            // Click mini to expand
+            miniBtn.onclick = function() {
+                miniBtn.style.display = 'none';
                 logContainer.style.display = 'block';
-                const time = new Date().toLocaleTimeString();
-                const entry = document.createElement('div');
-                entry.style.marginBottom = '4px';
-                entry.textContent = `[${time}] ${message}`;
-                if (isError) {
-                    entry.style.color = '#ff6b6b';
-                }
-                logContainer.appendChild(entry);
-                logContainer.scrollTop = logContainer.scrollHeight;
-                console[isError ? 'error' : 'log']('SamuraiBob:', message);
+                updateLogDisplay();
             };
 
+            // Button handlers
+            setTimeout(function() {
+                document.getElementById('copy-log-btn').onclick = function() {
+                    navigator.clipboard.writeText(logs.join('\n') || 'No logs').then(function() {
+                        var btn = document.getElementById('copy-log-btn');
+                        btn.textContent = '✓ Copied';
+                        setTimeout(function() { btn.textContent = 'Copy'; }, 1200);
+                    });
+                };
+                document.getElementById('min-log-btn').onclick = function() {
+                    logContainer.style.display = 'none';
+                    miniBtn.style.display = 'flex';
+                };
+            }, 0);
+
+            function addLog(msg, isError) {
+                var time = new Date().toLocaleTimeString();
+                logs.push('[' + time + '] ' + msg);
+                if (logs.length > 100) logs.shift();
+                if (isError) {
+                    hasErrors = true;
+                    miniBtn.style.background = '#ff4444';
+                    miniBtn.style.color = '#fff';
+                }
+                if (logContainer.style.display !== 'none') updateLogDisplay();
+            }
+
+            // Capture console.log, warn, error
+            var origLog = console.log, origWarn = console.warn, origError = console.error;
+            console.log = function() { var m = Array.prototype.slice.call(arguments).join(' '); addLog(m, false); origLog.apply(console, arguments); };
+            console.warn = function() { var m = 'WARN: ' + Array.prototype.slice.call(arguments).join(' '); addLog(m, false); origWarn.apply(console, arguments); };
+            console.error = function() { var m = 'ERROR: ' + Array.prototype.slice.call(arguments).join(' '); addLog(m, true); origError.apply(console, arguments); };
+
+            window.__samuraiLog = function(message, isError) { addLog(message, isError); };
+
             window.addEventListener('error', function(event) {
-                if (window.__samuraiLog) {
-                    window.__samuraiLog(`Global error: ${event.message} @ ${event.filename}:${event.lineno}:${event.colno}`, true);
-                }
-                if (window.__samuraiUpdateBattleButton) {
-                    window.__samuraiUpdateBattleButton(false, 'Error');
-                }
+                addLog('UNCAUGHT: ' + event.message + ' @ ' + event.filename + ':' + event.lineno, true);
+                if (window.__samuraiUpdateBattleButton) window.__samuraiUpdateBattleButton(false, 'Error');
             });
 
             window.addEventListener('unhandledrejection', function(event) {
-                if (window.__samuraiLog) {
-                    window.__samuraiLog(`Unhandled promise rejection: ${event.reason}`, true);
-                }
-                if (window.__samuraiUpdateBattleButton) {
-                    window.__samuraiUpdateBattleButton(false, 'Error');
-                }
+                addLog('PROMISE: ' + event.reason, true);
+                if (window.__samuraiUpdateBattleButton) window.__samuraiUpdateBattleButton(false, 'Error');
             });
+
+            window.debugLogs = { get: function() { return logs.join('\n'); }, show: function() { miniBtn.click(); } };
         })();
 
         // Queue system for startGame to handle early clicks
@@ -313,6 +398,10 @@
                     console.log('Checking if startGame is ready:', typeof window.startGame);
                     if (typeof window.startGame === 'function') {
                         console.log('✅ Game is ready!');
+                        // Initialize main menu with keyboard navigation
+                        if (typeof window.initMainMenu === 'function') {
+                            window.initMainMenu();
+                        }
                     } else {
                         console.warn('⚠️ startGame not found after script load');
                     }

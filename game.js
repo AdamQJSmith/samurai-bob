@@ -58,6 +58,27 @@ function updateHitStop() {
     return false;
 }
 
+// ===== SMALL MATH HELPERS (animation + smoothing) =====
+function damp(current, target, lambda, dt) {
+    return current + (target - current) * (1 - Math.exp(-lambda * dt));
+}
+
+function deltaAngle(current, target) {
+    let d = target - current;
+    while (d > Math.PI) d -= Math.PI * 2;
+    while (d < -Math.PI) d += Math.PI * 2;
+    return d;
+}
+
+function dampAngle(current, target, lambda, dt) {
+    return current + deltaAngle(current, target) * (1 - Math.exp(-lambda * dt));
+}
+
+function easeInOutCubic(x) {
+    return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+}
+
+
 // ===== FLOATING DAMAGE NUMBERS =====
 let damageNumbers = [];
 
@@ -548,8 +569,10 @@ function updateSwordTrail() {
 
     // Only add trail points during attack
     if (playerStats.isAttackingNow) {
-        const swordTip = new THREE.Vector3(0, 2.5, 0);
-        player.userData.sword.localToWorld(swordTip);
+        const sword = player.userData.sword;
+        const tipLocal = (sword.userData && sword.userData.tipLocal) ? sword.userData.tipLocal : new THREE.Vector3(0, 2.5, 0);
+        const swordTip = tipLocal.clone();
+        sword.localToWorld(swordTip);
 
         swordTrailPoints.unshift({
             position: swordTip.clone(),
@@ -570,6 +593,7 @@ function updateSwordTrail() {
         }
     }
 }
+
 
 function renderSwordTrail() {
     // Remove old trail mesh
@@ -696,6 +720,10 @@ let playerStats = {
     powerMult: 1.0,
     isJumping: false,
     velocity: new THREE.Vector3(),
+    animTime: 0,
+    spacePressed: false,
+    isAttackingNow: false,
+    attackAnimTime: 0,
     isAttacking: false,
     attackCooldown: 0,
     isBlocking: false,
@@ -728,6 +756,15 @@ let gameTimer = 0;
 let enemySpawnTimer = 0;
 let enemySpawnRate = 120;
 let powerUpSpawnTimer = 0;
+let isPaused = false;
+let pauseMenuSelection = 0; // 0 = Continue, 1 = Save & Exit, 2 = Exit
+let mainMenuSelection = 0; // 0 = Battle Royale, 1 = Campaign, 2 = Settings, 3 = Volume
+const MAIN_MENU_ITEMS = 4;
+let newGamePromptSelection = 0; // 0 = New Game, 1 = Continue
+const NEWGAME_PROMPT_ITEMS = 2;
+let saveSlotSelection = 0; // Index of selected save slot (last index = back button)
+let pendingSaveData = null; // For when we need to replace a save
+const MAX_SAVES = 20;
 
 if (window.__samuraiLog) {
     window.__samuraiLog('game.js executing...');
@@ -1207,10 +1244,22 @@ function init() {
 
         renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
         renderer.shadowMap.enabled = true;
         renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.outputEncoding = THREE.sRGBEncoding;
-        renderer.toneMapping = THREE.NoToneMapping;
+
+        // Color management (support both older and newer Three.js builds)
+        if ('outputColorSpace' in renderer) {
+            renderer.outputColorSpace = THREE.SRGBColorSpace;
+        } else if ('outputEncoding' in renderer) {
+            renderer.outputEncoding = THREE.sRGBEncoding;
+        }
+
+        // Tone mapping for a richer, more "game-like" look
+        renderer.toneMapping = (THREE.ACESFilmicToneMapping !== undefined) ? THREE.ACESFilmicToneMapping : THREE.LinearToneMapping;
+        renderer.toneMappingExposure = 1.15;
+
         renderer.setClearColor(0x70B8E8, 1);
         document.getElementById('canvas-container').appendChild(renderer.domElement);
 
@@ -1249,7 +1298,121 @@ function init() {
     createArena();
 
     // Event listeners
-    document.addEventListener('keydown', (e) => keys[e.key.toLowerCase()] = true);
+    document.addEventListener('keydown', (e) => {
+        keys[e.key.toLowerCase()] = true;
+
+        // Blur any focused element to prevent browser focus cycling
+        if (document.activeElement) {
+            document.activeElement.blur();
+        }
+
+        // Handle main menu navigation (left/right, wraps around)
+        const titleScreen = document.getElementById('title-screen');
+        const newGamePrompt = document.getElementById('newgame-prompt');
+
+        if ((gameState === 'menu' || gameState === 'title') && titleScreen && !titleScreen.classList.contains('hidden')) {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft') {
+                mainMenuSelection = (mainMenuSelection - 1 + MAIN_MENU_ITEMS) % MAIN_MENU_ITEMS;
+                updateMainMenuUI();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight') {
+                mainMenuSelection = (mainMenuSelection + 1) % MAIN_MENU_ITEMS;
+                updateMainMenuUI();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                selectMainMenuItem();
+                e.preventDefault();
+                e.stopPropagation();
+                return; // Don't process any other handlers for this keypress
+            } else if (e.key === 'Tab') {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return; // Main menu handled this key
+        }
+
+        // Handle New Game / Continue prompt navigation
+        if (newGamePrompt && !newGamePrompt.classList.contains('hidden')) {
+            if (e.key === 'a' || e.key === 'A' || e.key === 'ArrowLeft' || e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
+                newGamePromptSelection = (newGamePromptSelection - 1 + NEWGAME_PROMPT_ITEMS) % NEWGAME_PROMPT_ITEMS;
+                updateNewGamePromptUI();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 'd' || e.key === 'D' || e.key === 'ArrowRight' || e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
+                newGamePromptSelection = (newGamePromptSelection + 1) % NEWGAME_PROMPT_ITEMS;
+                updateNewGamePromptUI();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                selectNewGamePromptItem();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 'Escape') {
+                hideNewGamePrompt();
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return;
+        }
+
+        // Handle Save Slots screen navigation
+        const savesScreen = document.getElementById('saves-screen');
+        if (savesScreen && !savesScreen.classList.contains('hidden')) {
+            const saves = getSaves();
+            const totalItems = saves.length + 1; // saves + back button
+
+            if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
+                saveSlotSelection = (saveSlotSelection - 1 + totalItems) % totalItems;
+                updateSaveSlotsUI();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
+                saveSlotSelection = (saveSlotSelection + 1) % totalItems;
+                updateSaveSlotsUI();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 'Enter' || e.key === ' ') {
+                selectSaveSlotItem();
+                e.preventDefault();
+                e.stopPropagation();
+            } else if (e.key === 'Escape') {
+                backToPrompt();
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            return;
+        }
+
+        // Handle pause menu
+        if (gameState === 'playing') {
+            if (e.key === 'Enter') {
+                if (isPaused) {
+                    // Select current option
+                    if (pauseMenuSelection === 0) {
+                        resumeGame();
+                    } else if (pauseMenuSelection === 1) {
+                        saveAndExit();
+                    } else {
+                        exitWithoutSaving();
+                    }
+                } else {
+                    // Open pause menu
+                    pauseGame();
+                }
+            } else if (isPaused) {
+                // Navigate pause menu with W/S or Arrow keys
+                if (e.key === 'w' || e.key === 'W' || e.key === 'ArrowUp') {
+                    pauseMenuSelection = Math.max(0, pauseMenuSelection - 1);
+                    updatePauseMenuUI();
+                } else if (e.key === 's' || e.key === 'S' || e.key === 'ArrowDown') {
+                    pauseMenuSelection = Math.min(2, pauseMenuSelection + 1);
+                    updatePauseMenuUI();
+                }
+            }
+        }
+    });
     document.addEventListener('keyup', (e) => keys[e.key.toLowerCase()] = false);
     // Mouse handlers are now in setupCameraControls()
 
@@ -1504,10 +1667,73 @@ function addBackgroundElements() {
     const backgroundGroup = new THREE.Group();
     backgroundGroup.name = 'backgroundGroup';
 
-    // === ROLLING GREEN HILLS - bright saturated green like reference ===
+    // =========================================================
+    // Midground water (river / lake) behind the arena
+    // This is just set dressing, outside the playable island.
+    // =========================================================
+    const midWaterMat = new THREE.MeshStandardMaterial({
+        color: 0x2F86D6,
+        roughness: 0.25,
+        metalness: 0.05
+    });
+
+    const lakeGeo = new THREE.CircleGeometry(32, 48);
+    const lake = new THREE.Mesh(lakeGeo, midWaterMat);
+    lake.rotation.x = -Math.PI / 2;
+    lake.position.set(0, -15.5, -72);
+    lake.scale.set(1.9, 1.0, 1.0); // ellipse
+    backgroundGroup.add(lake);
+
+    // Shore ring around the lake
+    const shoreGeo = new THREE.RingGeometry(32, 37, 48);
+    const shoreMat = new THREE.MeshStandardMaterial({
+        color: 0x55BB55,
+        roughness: 0.95,
+        metalness: 0.0
+    });
+    const shore = new THREE.Mesh(shoreGeo, shoreMat);
+    shore.rotation.x = -Math.PI / 2;
+    shore.position.set(0, -15.45, -72);
+    shore.scale.copy(lake.scale);
+    backgroundGroup.add(shore);
+
+    // =========================================================
+    // Distant mountains
+    // =========================================================
+    const mountainColors = [0x3D8F3D, 0x2F7A2F, 0x3A6DA3, 0x2F5E8F];
+    for (let i = 0; i < 10; i++) {
+        const height = 35 + Math.random() * 45;
+        const radius = 16 + Math.random() * 16;
+
+        const mountainGeo = new THREE.ConeGeometry(radius, height, 6);
+        const mountainMat = new THREE.MeshStandardMaterial({
+            color: mountainColors[i % mountainColors.length],
+            roughness: 0.98,
+            metalness: 0.0,
+            flatShading: true
+        });
+
+        const mountain = new THREE.Mesh(mountainGeo, mountainMat);
+
+        const angle = (i / 10) * Math.PI * 2 + 0.4;
+        const distance = 170 + Math.random() * 70;
+
+        mountain.position.set(
+            Math.cos(angle) * distance,
+            -15 + height * 0.35,
+            Math.sin(angle) * distance - 190 // bias negative Z so it sits behind the arena
+        );
+
+        mountain.rotation.y = Math.random() * Math.PI;
+        backgroundGroup.add(mountain);
+    }
+
+    // =========================================================
+    // Rolling green hills (existing look, kept but slightly richer)
+    // =========================================================
     const hillColors = [0x44AA44, 0x55BB55, 0x3D9D3D, 0x66CC66];
 
-    // Large distant hills
+    // Large distant hills - pushed far from arena (arena radius is 17)
     for (let i = 0; i < 8; i++) {
         const radius = 25 + Math.random() * 20;
         const hillGeo = new THREE.SphereGeometry(radius, 32, 32, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -1518,7 +1744,7 @@ function addBackgroundElements() {
         });
         const hill = new THREE.Mesh(hillGeo, hillMat);
         const angle = (i / 8) * Math.PI * 2 + Math.random() * 0.3;
-        const distance = 60 + Math.random() * 30;
+        const distance = 100 + Math.random() * 40; // Pushed further out
         hill.position.set(
             Math.cos(angle) * distance,
             -15,
@@ -1527,7 +1753,7 @@ function addBackgroundElements() {
         backgroundGroup.add(hill);
     }
 
-    // Closer medium hills
+    // Medium hills - also pushed further out
     for (let i = 0; i < 6; i++) {
         const radius = 15 + Math.random() * 10;
         const hillGeo = new THREE.SphereGeometry(radius, 24, 24, 0, Math.PI * 2, 0, Math.PI / 2);
@@ -1538,7 +1764,7 @@ function addBackgroundElements() {
         });
         const hill = new THREE.Mesh(hillGeo, hillMat);
         const angle = (i / 6) * Math.PI * 2 + 0.5;
-        const distance = 45 + Math.random() * 15;
+        const distance = 70 + Math.random() * 20; // Pushed further out
         hill.position.set(
             Math.cos(angle) * distance,
             -15,
@@ -1547,43 +1773,65 @@ function addBackgroundElements() {
         backgroundGroup.add(hill);
     }
 
-    // === LARGE TREE on edge of arena - like reference ===
-    // Thick brown trunk - warm rich brown like reference
+    // =========================================================
+    // Trees
+    // =========================================================
+    function makeTree(x, y, z, s) {
+        const g = new THREE.Group();
+
+        const trunkGeo = new THREE.CylinderGeometry(0.35 * s, 0.55 * s, 4.2 * s, 8);
+        const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.95, metalness: 0.0, flatShading: true });
+        const trunk = new THREE.Mesh(trunkGeo, trunkMat);
+        trunk.position.y = 2.1 * s;
+        g.add(trunk);
+
+        const foliageMat = new THREE.MeshStandardMaterial({ color: 0x44BB44, roughness: 0.9, metalness: 0.0, flatShading: true });
+        const f1 = new THREE.Mesh(new THREE.SphereGeometry(1.3 * s, 10, 10), foliageMat);
+        const f2 = new THREE.Mesh(new THREE.SphereGeometry(1.1 * s, 10, 10), foliageMat);
+        const f3 = new THREE.Mesh(new THREE.SphereGeometry(1.0 * s, 10, 10), foliageMat);
+        f1.position.set(0, 4.6 * s, 0);
+        f2.position.set(-0.8 * s, 4.2 * s, 0.5 * s);
+        f3.position.set(0.8 * s, 4.3 * s, 0.2 * s);
+        g.add(f1, f2, f3);
+
+        g.position.set(x, y, z);
+        return g;
+    }
+
+    // Large tree on the edge like your reference
     const trunkGeo = new THREE.CylinderGeometry(2.5, 3.5, 25, 24);
     const trunkMat = new THREE.MeshStandardMaterial({ color: 0x8B5A2B, roughness: 0.9, metalness: 0.0 });
     const trunk = new THREE.Mesh(trunkGeo, trunkMat);
     trunk.position.set(18, 8, -8);
     backgroundGroup.add(trunk);
 
-    // Trunk base bulge
     const trunkBaseGeo = new THREE.SphereGeometry(4, 16, 16, 0, Math.PI * 2, 0, Math.PI / 2);
     const trunkBase = new THREE.Mesh(trunkBaseGeo, trunkMat);
     trunkBase.position.set(18, -4, -8);
     trunkBase.scale.set(1, 0.6, 1);
     backgroundGroup.add(trunkBase);
 
-    // Tree branches (simple stumps)
     const branchGeo = new THREE.CylinderGeometry(0.5, 0.8, 4, 12);
     const branch1 = new THREE.Mesh(branchGeo, trunkMat);
     branch1.position.set(16, 12, -7);
     branch1.rotation.z = 0.6;
     backgroundGroup.add(branch1);
+
     const branch2 = new THREE.Mesh(branchGeo, trunkMat);
     branch2.position.set(20, 14, -9);
     branch2.rotation.z = -0.5;
     backgroundGroup.add(branch2);
 
-    // Large fluffy green foliage - multiple spheres, bright green like reference
     const foliageColor = 0x44BB44;
     const foliageMat = new THREE.MeshStandardMaterial({ color: foliageColor, roughness: 0.85, metalness: 0.0 });
 
     const foliagePositions = [
-        [18, 22, -8, 7],   // main center
-        [15, 20, -6, 5],   // left
-        [21, 20, -10, 5],  // right
-        [17, 26, -7, 5],   // top left
-        [20, 25, -9, 4],   // top right
-        [18, 17, -8, 4],   // bottom
+        [18, 22, -8, 7],
+        [15, 20, -6, 5],
+        [21, 20, -10, 5],
+        [17, 26, -7, 5],
+        [20, 25, -9, 4],
+        [18, 17, -8, 4],
     ];
 
     foliagePositions.forEach(([x, y, z, r]) => {
@@ -1593,12 +1841,51 @@ function addBackgroundElements() {
         backgroundGroup.add(foliage);
     });
 
-    // === FLUFFY WHITE CLOUDS - bright white like reference ===
+    // Sprinkle smaller trees near the lake for the "mountains + river + trees" read
+    for (let i = 0; i < 18; i++) {
+        const angle = (i / 18) * Math.PI * 2 + Math.random() * 0.4;
+        const dist = 18 + Math.random() * 14;
+        const x = Math.cos(angle) * dist + (Math.random() - 0.5) * 6;
+        const z = -72 + Math.sin(angle) * dist + (Math.random() - 0.5) * 6;
+        const s = 0.9 + Math.random() * 0.8;
+        backgroundGroup.add(makeTree(x, -15.5, z, s));
+    }
+
+    // =========================================================
+    // Distant horizon hills
+    // =========================================================
+    for (let i = 0; i < 12; i++) {
+        const radius = 40 + Math.random() * 30;
+        const hillGeo = new THREE.SphereGeometry(radius, 24, 24, 0, Math.PI * 2, 0, Math.PI / 3);
+        const hillMat = new THREE.MeshStandardMaterial({
+            color: 0x55BB55,
+            roughness: 0.95,
+            metalness: 0.0
+        });
+        const hill = new THREE.Mesh(hillGeo, hillMat);
+        const angle = (i / 12) * Math.PI * 2;
+        const distance = 120 + Math.random() * 40;
+        hill.position.set(
+            Math.cos(angle) * distance,
+            -20,
+            Math.sin(angle) * distance
+        );
+        backgroundGroup.add(hill);
+    }
+
+    // =========================================================
+    // Clouds
+    // =========================================================
     for (let i = 0; i < 10; i++) {
         const cloudGroup = new THREE.Group();
-        const cloudMat = new THREE.MeshStandardMaterial({ color: 0xFFFFFF, roughness: 1, metalness: 0, emissive: 0xFFFFFF, emissiveIntensity: 0.15 });
+        const cloudMat = new THREE.MeshStandardMaterial({
+            color: 0xFFFFFF,
+            roughness: 1,
+            metalness: 0,
+            emissive: 0xFFFFFF,
+            emissiveIntensity: 0.15
+        });
 
-        // Each cloud is made of multiple spheres for fluffiness
         const numPuffs = 3 + Math.floor(Math.random() * 3);
         for (let j = 0; j < numPuffs; j++) {
             const puffSize = 3 + Math.random() * 3;
@@ -1622,169 +1909,174 @@ function addBackgroundElements() {
         backgroundGroup.add(cloudGroup);
     }
 
-    // === DISTANT HORIZON HILLS - bright green like reference ===
-    for (let i = 0; i < 12; i++) {
-        const radius = 40 + Math.random() * 30;
-        const hillGeo = new THREE.SphereGeometry(radius, 24, 24, 0, Math.PI * 2, 0, Math.PI / 3);
-        const hillMat = new THREE.MeshStandardMaterial({
-            color: 0x55BB55,
-            roughness: 0.95,
-            metalness: 0.0
-        });
-        const hill = new THREE.Mesh(hillGeo, hillMat);
-        const angle = (i / 12) * Math.PI * 2;
-        const distance = 120 + Math.random() * 40;
-        hill.position.set(
-            Math.cos(angle) * distance,
-            -20,
-            Math.sin(angle) * distance
-        );
-        backgroundGroup.add(hill);
-    }
-
     scene.add(backgroundGroup);
 }
+
 
 // ===== CREATE SAMURAI BOB - TEXTURE-BASED APPROACH =====
 function createPlayer() {
     const playerGroup = new THREE.Group();
     playerGroup.name = 'samuraiBob';
 
+    // Root model group so we can animate without touching physics position
+    const model = new THREE.Group();
+    model.name = 'bobModel';
+    playerGroup.add(model);
+
     // ========== MATERIALS - Exact colors from reference ==========
-    // Blue kimono - matches the vibrant blue in reference
     const kimonoBlue = new THREE.MeshStandardMaterial({
         color: 0x2E5CB8,
         roughness: 0.7,
         flatShading: true
     });
-    // Skin - warm peach tone from reference
+
     const skin = new THREE.MeshStandardMaterial({
         color: 0xF0B888,
         roughness: 0.6,
         flatShading: true
     });
-    // Darker skin for nose
+
     const noseSkin = new THREE.MeshStandardMaterial({
         color: 0xD4956A,
         roughness: 0.6,
         flatShading: true
     });
-    // Black for hair, eyebrows, mustache
+
     const black = new THREE.MeshStandardMaterial({
         color: 0x1a1a1a,
         roughness: 0.8,
         flatShading: true
     });
-    // Red pants - darker red/maroon from reference
+
     const pants = new THREE.MeshStandardMaterial({
         color: 0xAA2222,
         roughness: 0.7,
         flatShading: true
     });
-    // Dark shoes
+
     const shoes = new THREE.MeshStandardMaterial({
         color: 0x222222,
         roughness: 0.8,
         flatShading: true
     });
-    // Gray metal for shield rim
+
     const metal = new THREE.MeshStandardMaterial({
         color: 0x777788,
         roughness: 0.4,
         metalness: 0.5,
         flatShading: true
     });
-    // White/gray for collar trim
+
     const collarWhite = new THREE.MeshStandardMaterial({
         color: 0xCCCCCC,
         roughness: 0.6,
         flatShading: true
     });
-    // Black obi belt
+
     const obiBelt = new THREE.MeshStandardMaterial({
         color: 0x1a1a1a,
         roughness: 0.7,
         flatShading: true
     });
-    // Pink for cheeks
+
     const cheekPink = new THREE.MeshStandardMaterial({
         color: 0xE07070,
         roughness: 0.9,
         flatShading: true
     });
-    // Red for mouth
+
     const mouthRed = new THREE.MeshStandardMaterial({
         color: 0xCC3333,
         roughness: 0.6,
         flatShading: true
     });
-    // White for eye highlights
+
     const white = new THREE.MeshBasicMaterial({ color: 0xffffff });
 
-    // ========== BODY - Blue kimono with collar and belt ==========
-    // Main torso - blue kimono
+    // ========== BODY ==========
     const torsoGeo = new THREE.BoxGeometry(1.8, 1.4, 1.1);
     const torso = new THREE.Mesh(torsoGeo, kimonoBlue);
     torso.position.y = 1.35;
-    playerGroup.add(torso);
+    model.add(torso);
 
-    // V-COLLAR - White/gray trim like reference
-    // Left collar piece
+    // Collar
     const collarGeo = new THREE.BoxGeometry(0.15, 0.9, 0.5);
     const leftCollar = new THREE.Mesh(collarGeo, collarWhite);
     leftCollar.position.set(-0.35, 1.7, 0.45);
     leftCollar.rotation.z = 0.4;
     leftCollar.rotation.y = -0.15;
-    playerGroup.add(leftCollar);
-    // Right collar piece
+    model.add(leftCollar);
+
     const rightCollar = new THREE.Mesh(collarGeo, collarWhite);
     rightCollar.position.set(0.35, 1.7, 0.45);
     rightCollar.rotation.z = -0.4;
     rightCollar.rotation.y = 0.15;
-    playerGroup.add(rightCollar);
+    model.add(rightCollar);
 
-    // BLACK OBI BELT around waist
+    // Obi belt
     const obiGeo = new THREE.BoxGeometry(1.85, 0.35, 1.15);
     const obi = new THREE.Mesh(obiGeo, obiBelt);
     obi.position.y = 0.85;
-    playerGroup.add(obi);
+    model.add(obi);
 
-    // Shoulder bumps - rounded shoulders
+    // Shoulders
     const shoulderGeo = new THREE.SphereGeometry(0.38, 6, 5);
     const leftShoulderBump = new THREE.Mesh(shoulderGeo, kimonoBlue);
     leftShoulderBump.position.set(-0.95, 1.7, 0);
-    playerGroup.add(leftShoulderBump);
+    model.add(leftShoulderBump);
+
     const rightShoulderBump = new THREE.Mesh(shoulderGeo, kimonoBlue);
     rightShoulderBump.position.set(0.95, 1.7, 0);
-    playerGroup.add(rightShoulderBump);
+    model.add(rightShoulderBump);
 
-    // ========== LEFT ARM with SHIELD ==========
-    // The animation system dynamically creates arm segments between joints
-    const leftArmGroup = new THREE.Group();
-    leftArmGroup.position.set(-1.1, 1.5, 0.3);
+    // ========== SIMPLE RIG ==========
+    // The goal here is: sword and shield are children of "hand" nodes.
+    // That makes them feel held, and lets animations read as weighty.
 
-    // Joint markers - small spheres that get positioned by animation
-    // Elbow joint
-    const leftElbowGeo = new THREE.SphereGeometry(0.2, 6, 5);
-    const leftElbow = new THREE.Mesh(leftElbowGeo, kimonoBlue);
-    leftElbow.position.set(-0.3, -0.5, 0.3); // Default resting position
-    leftArmGroup.add(leftElbow);
+    const ARM_UPPER_LEN = 0.55;
+    const ARM_FORE_LEN = 0.50;
+    const LEG_LEN = 0.55;
 
-    // Hand
-    const leftHandGeo = new THREE.SphereGeometry(0.22, 6, 5);
-    const leftHand = new THREE.Mesh(leftHandGeo, skin);
-    leftHand.position.set(-0.5, -0.9, 0.6); // Default resting position
-    leftArmGroup.add(leftHand);
+    // LEFT ARM (shield)
+    const leftShoulder = new THREE.Group();
+    leftShoulder.position.set(-0.95, 1.75, 0.22);
+    model.add(leftShoulder);
 
-    // SHIELD - round wooden with metal rim and flower emblem
+    const leftUpperArmGeo = new THREE.CylinderGeometry(0.24, 0.28, ARM_UPPER_LEN, 6);
+    const leftUpperArm = new THREE.Mesh(leftUpperArmGeo, kimonoBlue);
+    leftUpperArm.position.y = -ARM_UPPER_LEN / 2;
+    leftShoulder.add(leftUpperArm);
+
+    const leftElbow = new THREE.Group();
+    leftElbow.position.y = -ARM_UPPER_LEN;
+    leftShoulder.add(leftElbow);
+
+    const leftForearmGeo = new THREE.CylinderGeometry(0.18, 0.22, ARM_FORE_LEN, 6);
+    const leftForearm = new THREE.Mesh(leftForearmGeo, skin);
+    leftForearm.position.y = -ARM_FORE_LEN / 2;
+    leftElbow.add(leftForearm);
+
+    const leftHand = new THREE.Group();
+    leftHand.position.y = -ARM_FORE_LEN;
+    leftElbow.add(leftHand);
+
+    const leftHandGeo = new THREE.SphereGeometry(0.18, 6, 5);
+    const leftHandMesh = new THREE.Mesh(leftHandGeo, skin);
+    leftHandMesh.position.y = -0.06;
+    leftHand.add(leftHandMesh);
+
+    const shieldMount = new THREE.Group();
+    shieldMount.position.set(-0.08, -0.05, 0.55);
+    shieldMount.rotation.set(0.05, -0.25, 0.0);
+    leftHand.add(shieldMount);
+
+    // SHIELD
     const shieldGroup = new THREE.Group();
 
-    // Metal rim - thick gray ring
     const rimGeo = new THREE.TorusGeometry(0.9, 0.12, 8, 24);
     const rim = new THREE.Mesh(rimGeo, metal);
     shieldGroup.add(rim);
 
-    // Shield face - wooden with flower texture
     const shieldFaceGeo = new THREE.CircleGeometry(0.85, 24);
     const shieldFaceMat = new THREE.MeshStandardMaterial({
         map: createShieldTexture(),
@@ -1794,7 +2086,6 @@ function createPlayer() {
     shieldFace.position.z = 0.02;
     shieldGroup.add(shieldFace);
 
-    // Shield back
     const shieldBackGeo = new THREE.CircleGeometry(0.85, 24);
     const shieldBackMat = new THREE.MeshStandardMaterial({ color: 0x654321, roughness: 0.8 });
     const shieldBack = new THREE.Mesh(shieldBackGeo, shieldBackMat);
@@ -1802,319 +2093,375 @@ function createPlayer() {
     shieldBack.rotation.y = Math.PI;
     shieldGroup.add(shieldBack);
 
-    // Default shield position - held at side like reference image
-    shieldGroup.position.set(-0.6, -0.85, 0.75);
-    shieldGroup.rotation.y = -0.25;
-    shieldGroup.rotation.x = 0.05;
-    leftArmGroup.add(shieldGroup);
+    shieldGroup.scale.set(0.95, 0.95, 0.95);
+    shieldMount.add(shieldGroup);
 
-    playerGroup.add(leftArmGroup);
+    // RIGHT ARM (sword)
+    const rightShoulder = new THREE.Group();
+    rightShoulder.position.set(0.95, 1.75, 0.12);
+    model.add(rightShoulder);
 
-    // Store references for animation system
-    playerGroup.userData.leftArm = leftArmGroup;
-    playerGroup.userData.shield = shieldGroup;
-    playerGroup.userData.leftHand = leftHand;
-    playerGroup.userData.leftElbow = leftElbow;
-    playerGroup.userData.kimonoBlue = kimonoBlue;
-    playerGroup.userData.skin = skin;
-    playerGroup.userData.leftUpperArmMesh = null;
-    playerGroup.userData.leftForearmMesh = null;
-
-    // Function to create arm tube segment between two joint positions
-    playerGroup.userData.createArmSegment = function(start, end, startRadius, endRadius, material) {
-        const direction = new THREE.Vector3().subVectors(end, start);
-        const length = direction.length();
-        if (length < 0.01) return null;
-        const geo = new THREE.CylinderGeometry(endRadius, startRadius, length, 6);
-        const mesh = new THREE.Mesh(geo, material);
-        mesh.position.copy(start).add(end).multiplyScalar(0.5);
-        const up = new THREE.Vector3(0, 1, 0);
-        const dir = direction.clone().normalize();
-        const dot = up.dot(dir);
-        if (Math.abs(dot) < 0.999) {
-            const axis = new THREE.Vector3().crossVectors(up, dir).normalize();
-            const angle = Math.acos(dot);
-            mesh.setRotationFromAxisAngle(axis, angle);
-        }
-        return mesh;
-    };
-
-    // Build initial arm segments
-    const shoulderPos = new THREE.Vector3(0, 0, 0);
-    const initUpperArm = playerGroup.userData.createArmSegment(
-        shoulderPos, leftElbow.position, 0.24, 0.2, kimonoBlue
-    );
-    const initForearm = playerGroup.userData.createArmSegment(
-        leftElbow.position, leftHand.position, 0.2, 0.16, skin
-    );
-    if (initUpperArm) {
-        leftArmGroup.add(initUpperArm);
-        playerGroup.userData.leftUpperArmMesh = initUpperArm;
-    }
-    if (initForearm) {
-        leftArmGroup.add(initForearm);
-        playerGroup.userData.leftForearmMesh = initForearm;
-    }
-
-    // ========== RIGHT ARM with SWORD ==========
-    const rightArmGroup = new THREE.Group();
-    rightArmGroup.position.set(1.1, 1.5, 0);
-
-    // Upper arm (blue sleeve)
-    const rightUpperArmGeo = new THREE.CylinderGeometry(0.22, 0.28, 0.5, 6);
+    const rightUpperArmGeo = new THREE.CylinderGeometry(0.24, 0.28, ARM_UPPER_LEN, 6);
     const rightUpperArm = new THREE.Mesh(rightUpperArmGeo, kimonoBlue);
-    rightUpperArm.rotation.z = -0.4;
-    rightUpperArm.position.set(0.15, -0.1, 0.05);
-    rightArmGroup.add(rightUpperArm);
+    rightUpperArm.position.y = -ARM_UPPER_LEN / 2;
+    rightShoulder.add(rightUpperArm);
 
-    // Forearm (skin)
-    const rightForearmGeo = new THREE.CylinderGeometry(0.16, 0.2, 0.35, 6);
+    const rightElbow = new THREE.Group();
+    rightElbow.position.y = -ARM_UPPER_LEN;
+    rightShoulder.add(rightElbow);
+
+    const rightForearmGeo = new THREE.CylinderGeometry(0.18, 0.22, ARM_FORE_LEN, 6);
     const rightForearm = new THREE.Mesh(rightForearmGeo, skin);
-    rightForearm.rotation.z = -0.6;
-    rightForearm.position.set(0.35, -0.35, 0.1);
-    rightArmGroup.add(rightForearm);
+    rightForearm.position.y = -ARM_FORE_LEN / 2;
+    rightElbow.add(rightForearm);
 
-    // Right hand
+    const rightHand = new THREE.Group();
+    rightHand.position.y = -ARM_FORE_LEN;
+    rightElbow.add(rightHand);
+
     const rightHandGeo = new THREE.SphereGeometry(0.18, 6, 5);
-    const rightHand = new THREE.Mesh(rightHandGeo, skin);
-    rightHand.position.set(0.5, -0.5, 0.15);
-    rightArmGroup.add(rightHand);
+    const rightHandMesh = new THREE.Mesh(rightHandGeo, skin);
+    rightHandMesh.position.y = -0.06;
+    rightHand.add(rightHandMesh);
+
+    const swordMount = new THREE.Group();
+    swordMount.position.set(0.12, -0.08, 0.35);
+    swordMount.rotation.set(-0.10, 0.15, 0.35);
+    rightHand.add(swordMount);
+
+    function createKatanaBladeGeometry(length, baseWidth, tipWidth, thickness, curve, segments) {
+        const geo = new THREE.BoxGeometry(baseWidth, length, thickness, 1, Math.max(2, segments | 0), 1);
+        const pos = geo.attributes.position;
+
+        for (let i = 0; i < pos.count; i++) {
+            const x = pos.getX(i);
+            const y = pos.getY(i);
+            const z = pos.getZ(i);
+
+            const t = (y + length / 2) / length; // 0..1 from base to tip
+            const w = baseWidth + (tipWidth - baseWidth) * t;
+
+            // Taper width toward the tip
+            const sx = w / baseWidth;
+            pos.setX(i, x * sx);
+
+            // Subtle curve in +Z toward the tip
+            const c = Math.sin(t * Math.PI) * curve;
+            pos.setZ(i, z + c * 0.15);
+        }
+
+        pos.needsUpdate = true;
+        geo.computeVertexNormals();
+        return geo;
+    }
 
     // SWORD
     const swordGroup = new THREE.Group();
 
-    // Blade - silver/white
-    const bladeGeo = new THREE.BoxGeometry(0.08, 2.0, 0.04);
-    const bladeMat = new THREE.MeshStandardMaterial({ color: 0xDDDDDD, metalness: 0.8, roughness: 0.2 });
+    const bladeLen = 2.25;
+    const bladeGeo = createKatanaBladeGeometry(bladeLen, 0.18, 0.08, 0.06, 0.18, 6);
+    const bladeMat = new THREE.MeshStandardMaterial({
+        color: 0xE7E7E7,
+        metalness: 0.75,
+        roughness: 0.25,
+        flatShading: true
+    });
     const blade = new THREE.Mesh(bladeGeo, bladeMat);
-    blade.position.y = 1.0;
+    blade.position.y = bladeLen / 2;
     swordGroup.add(blade);
 
-    // Guard - brown
-    const guardGeo = new THREE.BoxGeometry(0.45, 0.08, 0.15);
-    const guardMat = new THREE.MeshStandardMaterial({ color: 0x5a4030, roughness: 0.8 });
+    // Tip
+    const tipGeo = new THREE.ConeGeometry(0.09, 0.22, 4);
+    const tip = new THREE.Mesh(tipGeo, bladeMat);
+    tip.position.y = bladeLen + 0.08;
+    tip.rotation.x = Math.PI;
+    swordGroup.add(tip);
+
+    // Guard (tsuba) - round and chunkier
+    const guardGeo = new THREE.CylinderGeometry(0.30, 0.34, 0.07, 10);
+    const guardMat = new THREE.MeshStandardMaterial({
+        color: 0x4b3326,
+        roughness: 0.85,
+        flatShading: true
+    });
     const guard = new THREE.Mesh(guardGeo, guardMat);
     guard.position.y = 0.05;
+    guard.rotation.x = Math.PI / 2;
     swordGroup.add(guard);
 
-    // Handle - dark brown
-    const handleGeo = new THREE.CylinderGeometry(0.06, 0.06, 0.45, 6);
-    const handleMat = new THREE.MeshStandardMaterial({ color: 0x3a2a1a, roughness: 0.9 });
+    // Collar (habaki)
+    const collarGeo2 = new THREE.CylinderGeometry(0.11, 0.13, 0.09, 8);
+    const collar2 = new THREE.Mesh(collarGeo2, bladeMat);
+    collar2.position.y = 0.12;
+    swordGroup.add(collar2);
+
+    // Handle
+    const handleGeo = new THREE.CylinderGeometry(0.07, 0.075, 0.60, 6);
+    const handleMat = new THREE.MeshStandardMaterial({
+        color: 0x2f2115,
+        roughness: 0.9,
+        flatShading: true
+    });
     const handle = new THREE.Mesh(handleGeo, handleMat);
-    handle.position.y = -0.2;
+    handle.position.y = -0.30;
     swordGroup.add(handle);
 
-    swordGroup.position.set(0.5, -0.55, 0.2);
-    swordGroup.rotation.z = 0.2;
-    rightArmGroup.add(swordGroup);
+    // Pommel
+    const pommelGeo = new THREE.SphereGeometry(0.09, 6, 6);
+    const pommelMat = new THREE.MeshStandardMaterial({
+        color: 0x1a1a1a,
+        roughness: 0.8,
+        flatShading: true
+    });
+    const pommel = new THREE.Mesh(pommelGeo, pommelMat);
+    pommel.position.y = -0.62;
+    swordGroup.add(pommel);
 
-    playerGroup.add(rightArmGroup);
-    playerGroup.userData.rightArm = rightArmGroup;
-    playerGroup.userData.sword = swordGroup;
+    swordGroup.scale.set(1.15, 1.15, 1.15);
+    swordGroup.position.y = -0.15; // put the grip into the hand a bit
+    swordGroup.userData.tipLocal = new THREE.Vector3(0, bladeLen + 0.15, 0);
 
-    // ========== LEGS - Short stubby red ==========
-    const legGeo = new THREE.CylinderGeometry(0.3, 0.32, 0.5, 6);
+    swordMount.add(swordGroup);
+
+    // ========== LEGS ==========
+    const leftHip = new THREE.Group();
+    leftHip.position.set(-0.4, 0.65, 0);
+    model.add(leftHip);
+
+    const rightHip = new THREE.Group();
+    rightHip.position.set(0.4, 0.65, 0);
+    model.add(rightHip);
+
+    const legGeo = new THREE.CylinderGeometry(0.3, 0.32, LEG_LEN, 6);
     const leftLeg = new THREE.Mesh(legGeo, pants);
-    leftLeg.position.set(-0.4, 0.35, 0);
-    playerGroup.add(leftLeg);
-    const rightLeg = new THREE.Mesh(legGeo, pants);
-    rightLeg.position.set(0.4, 0.35, 0);
-    playerGroup.add(rightLeg);
+    leftLeg.position.y = -LEG_LEN / 2;
+    leftHip.add(leftLeg);
 
-    // ========== FEET - Dark rounded ==========
+    const rightLeg = new THREE.Mesh(legGeo, pants);
+    rightLeg.position.y = -LEG_LEN / 2;
+    rightHip.add(rightLeg);
+
     const footGeo = new THREE.SphereGeometry(0.3, 6, 5);
     const leftFoot = new THREE.Mesh(footGeo, shoes);
-    leftFoot.position.set(-0.4, 0.08, 0.06);
+    leftFoot.position.set(0, -LEG_LEN - 0.05, 0.06);
     leftFoot.scale.set(1.0, 0.4, 1.15);
-    playerGroup.add(leftFoot);
-    const rightFoot = new THREE.Mesh(footGeo, shoes);
-    rightFoot.position.set(0.4, 0.08, 0.06);
-    rightFoot.scale.set(1.0, 0.4, 1.15);
-    playerGroup.add(rightFoot);
+    leftHip.add(leftFoot);
 
-    // ========== HEAD - Large round head like reference ==========
-    // Head is slightly wider than tall, warm peach skin
+    const rightFoot = new THREE.Mesh(footGeo, shoes);
+    rightFoot.position.set(0, -LEG_LEN - 0.05, 0.06);
+    rightFoot.scale.set(1.0, 0.4, 1.15);
+    rightHip.add(rightFoot);
+
+    // ========== HEAD ==========
     const headGeo = new THREE.SphereGeometry(1.5, 12, 10);
     const head = new THREE.Mesh(headGeo, skin);
     head.position.y = 3.5;
-    head.scale.set(1.05, 0.95, 0.95); // Wider than tall
-    playerGroup.add(head);
+    head.scale.set(1.05, 0.95, 0.95);
+    model.add(head);
 
-    // ========== EYEBROWS - VERY thick, angled DOWN toward center (angry/determined) ==========
-    // In reference, eyebrows are thick angular wedges pointing down to nose
+    // Eyebrows
     const browGeo = new THREE.BoxGeometry(0.65, 0.22, 0.22);
-
-    // Left eyebrow - angles DOWN toward center
     const leftBrow = new THREE.Mesh(browGeo, black);
     leftBrow.position.set(-0.5, 3.9, 1.28);
-    leftBrow.rotation.z = -0.35; // Angles DOWN toward center
+    leftBrow.rotation.z = -0.35;
     leftBrow.rotation.x = -0.1;
-    playerGroup.add(leftBrow);
+    model.add(leftBrow);
 
-    // Right eyebrow - angles DOWN toward center
     const rightBrow = new THREE.Mesh(browGeo, black);
     rightBrow.position.set(0.5, 3.9, 1.28);
-    rightBrow.rotation.z = 0.35; // Angles DOWN toward center
+    rightBrow.rotation.z = 0.35;
     rightBrow.rotation.x = -0.1;
-    playerGroup.add(rightBrow);
+    model.add(rightBrow);
 
-    // ========== EYES - Black ovals with white highlights in upper-left ==========
+    // Eyes
     const eyeGeo = new THREE.SphereGeometry(0.16, 8, 8);
     const eyeMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.2 });
 
-    // Left eye - oval shape
     const leftEye = new THREE.Mesh(eyeGeo, eyeMat);
     leftEye.position.set(-0.5, 3.6, 1.32);
     leftEye.scale.set(1.0, 1.4, 0.5);
-    playerGroup.add(leftEye);
+    model.add(leftEye);
 
-    // Right eye
     const rightEye = new THREE.Mesh(eyeGeo, eyeMat);
     rightEye.position.set(0.5, 3.6, 1.32);
     rightEye.scale.set(1.0, 1.4, 0.5);
-    playerGroup.add(rightEye);
+    model.add(rightEye);
 
-    // Eye highlights - small white dots in upper-left of each eye
     const highlightGeo = new THREE.SphereGeometry(0.055, 6, 6);
-
     const leftHighlight = new THREE.Mesh(highlightGeo, white);
     leftHighlight.position.set(-0.57, 3.68, 1.38);
-    playerGroup.add(leftHighlight);
+    model.add(leftHighlight);
 
     const rightHighlight = new THREE.Mesh(highlightGeo, white);
     rightHighlight.position.set(0.43, 3.68, 1.38);
-    playerGroup.add(rightHighlight);
+    model.add(rightHighlight);
 
-    // ========== NOSE - Large bulbous nose, slightly darker skin ==========
+    // Nose
     const noseGeo = new THREE.SphereGeometry(0.32, 8, 6);
     const nose = new THREE.Mesh(noseGeo, noseSkin);
     nose.position.set(0, 3.35, 1.42);
     nose.scale.set(1.0, 0.85, 0.7);
-    playerGroup.add(nose);
+    model.add(nose);
 
-    // ========== ROSY CHEEKS - Bright pink circles ==========
+    // Cheeks
     const cheekGeo = new THREE.CircleGeometry(0.22, 12);
-
-    // Left cheek - flat circle on face
     const leftCheek = new THREE.Mesh(cheekGeo, cheekPink);
     leftCheek.position.set(-0.95, 3.4, 1.15);
     leftCheek.rotation.y = 0.5;
-    playerGroup.add(leftCheek);
+    model.add(leftCheek);
 
-    // Right cheek
     const rightCheek = new THREE.Mesh(cheekGeo, cheekPink);
     rightCheek.position.set(0.95, 3.4, 1.15);
     rightCheek.rotation.y = -0.5;
-    playerGroup.add(rightCheek);
+    model.add(rightCheek);
 
-    // ========== MUSTACHE - Handlebar style, curls UP at ends ==========
-    // Center section under nose
+    // Mustache
     const mustacheCenterGeo = new THREE.BoxGeometry(0.5, 0.15, 0.2);
     const mustacheCenter = new THREE.Mesh(mustacheCenterGeo, black);
     mustacheCenter.position.set(0, 3.12, 1.35);
-    playerGroup.add(mustacheCenter);
+    model.add(mustacheCenter);
 
-    // Left side - extends out and curves UP
     const mustacheSideGeo = new THREE.BoxGeometry(0.45, 0.12, 0.15);
     const leftMustache = new THREE.Mesh(mustacheSideGeo, black);
     leftMustache.position.set(-0.42, 3.12, 1.28);
     leftMustache.rotation.z = -0.2;
-    playerGroup.add(leftMustache);
+    model.add(leftMustache);
 
-    // Left curl tip - curls UP
     const curlTipGeo = new THREE.SphereGeometry(0.1, 6, 6);
     const leftCurlTip = new THREE.Mesh(curlTipGeo, black);
     leftCurlTip.position.set(-0.7, 3.2, 1.2);
     leftCurlTip.scale.set(1.2, 0.8, 0.6);
-    playerGroup.add(leftCurlTip);
+    model.add(leftCurlTip);
 
-    // Right side
     const rightMustache = new THREE.Mesh(mustacheSideGeo, black);
     rightMustache.position.set(0.42, 3.12, 1.28);
     rightMustache.rotation.z = 0.2;
-    playerGroup.add(rightMustache);
+    model.add(rightMustache);
 
-    // Right curl tip - curls UP
     const rightCurlTip = new THREE.Mesh(curlTipGeo, black);
     rightCurlTip.position.set(0.7, 3.2, 1.2);
     rightCurlTip.scale.set(1.2, 0.8, 0.6);
-    playerGroup.add(rightCurlTip);
+    model.add(rightCurlTip);
 
-    // ========== MOUTH - Red smile visible below mustache ==========
+    // Mouth
     const mouthGeo = new THREE.SphereGeometry(0.15, 8, 6);
     const mouth = new THREE.Mesh(mouthGeo, mouthRed);
     mouth.position.set(0, 2.95, 1.28);
     mouth.scale.set(2.0, 0.7, 0.4);
-    playerGroup.add(mouth);
+    model.add(mouth);
 
-    // ========== EARS - Large, stick out at eye level ==========
-    // Ears are prominent in reference, stick out from sides
+    // Ears
     const earGeo = new THREE.SphereGeometry(0.28, 6, 5);
-
-    // Left ear
     const leftEar = new THREE.Mesh(earGeo, skin);
     leftEar.position.set(-1.5, 3.5, 0.15);
     leftEar.scale.set(0.35, 1.0, 0.65);
-    playerGroup.add(leftEar);
+    model.add(leftEar);
 
-    // Right ear
     const rightEar = new THREE.Mesh(earGeo, skin);
     rightEar.position.set(1.5, 3.5, 0.15);
     rightEar.scale.set(0.35, 1.0, 0.65);
-    playerGroup.add(rightEar);
+    model.add(rightEar);
 
-    // ========== HAIR - Angular low-poly black hair ==========
-    // Main hair cap - covers top and back of head with faceted look
+    // Hair
     const hairCapGeo = new THREE.SphereGeometry(1.58, 6, 4, 0, Math.PI * 2, 0, Math.PI * 0.52);
     const hairCap = new THREE.Mesh(hairCapGeo, black);
     hairCap.position.set(0, 3.8, -0.05);
     hairCap.rotation.x = 0.1;
-    playerGroup.add(hairCap);
+    model.add(hairCap);
 
-    // Angular hairline across forehead - sharp edge
     const hairlineGeo = new THREE.BoxGeometry(2.6, 0.25, 0.45);
     const hairline = new THREE.Mesh(hairlineGeo, black);
     hairline.position.set(0, 4.25, 0.65);
     hairline.rotation.x = -0.25;
-    playerGroup.add(hairline);
+    model.add(hairline);
 
-    // Left side hair - angular piece coming down
     const sideHairGeo = new THREE.BoxGeometry(0.35, 0.55, 0.35);
     const leftSideHair = new THREE.Mesh(sideHairGeo, black);
     leftSideHair.position.set(-1.25, 3.9, 0.35);
     leftSideHair.rotation.z = 0.2;
-    playerGroup.add(leftSideHair);
+    model.add(leftSideHair);
 
-    // Right side hair
     const rightSideHair = new THREE.Mesh(sideHairGeo, black);
     rightSideHair.position.set(1.25, 3.9, 0.35);
     rightSideHair.rotation.z = -0.2;
-    playerGroup.add(rightSideHair);
+    model.add(rightSideHair);
 
-    // Hair back coverage
     const hairBackGeo = new THREE.SphereGeometry(1.5, 6, 4, 0, Math.PI * 2, 0, Math.PI * 0.6);
     const hairBack = new THREE.Mesh(hairBackGeo, black);
     hairBack.position.set(0, 3.65, -0.35);
     hairBack.rotation.x = 0.2;
-    playerGroup.add(hairBack);
+    model.add(hairBack);
 
-    // ========== TOPKNOT - Chunky angular bun on top ==========
-    // Base/neck of topknot
+    // Topknot
     const knotBaseGeo = new THREE.CylinderGeometry(0.2, 0.28, 0.35, 6);
     const knotBase = new THREE.Mesh(knotBaseGeo, black);
     knotBase.position.set(0, 4.85, -0.05);
-    playerGroup.add(knotBase);
+    model.add(knotBase);
 
-    // Bun - faceted chunky shape
     const knotBunGeo = new THREE.DodecahedronGeometry(0.32, 0);
     const knotBun = new THREE.Mesh(knotBunGeo, black);
     knotBun.position.set(0, 5.15, -0.05);
     knotBun.scale.set(1.3, 0.85, 1.3);
-    playerGroup.add(knotBun);
+    model.add(knotBun);
 
-    scene.add(playerGroup);
+    // Shadows
+    playerGroup.traverse(obj => {
+        if (obj.isMesh) {
+            obj.castShadow = true;
+            obj.receiveShadow = false;
+        }
+    });
+
+    // Store rig references for animation
+    playerGroup.userData.model = model;
+    playerGroup.userData.torso = torso;
+
+    playerGroup.userData.leftShoulder = leftShoulder;
+    playerGroup.userData.leftElbow = leftElbow;
+    playerGroup.userData.leftHand = leftHand;
+    playerGroup.userData.shieldMount = shieldMount;
+    playerGroup.userData.shield = shieldGroup;
+
+    playerGroup.userData.rightShoulder = rightShoulder;
+    playerGroup.userData.rightElbow = rightElbow;
+    playerGroup.userData.rightHand = rightHand;
+    playerGroup.userData.swordMount = swordMount;
+    playerGroup.userData.sword = swordGroup;
+
+    playerGroup.userData.leftHip = leftHip;
+    playerGroup.userData.rightHip = rightHip;
+
+    // Default pose values (used by animation update)
+    playerGroup.userData.pose = {
+        left: { shoulderX: -0.35, shoulderY: 0.15, shoulderZ: 0.55, elbowX: -1.05 },
+        right: { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 },
+        swordMount: { x: -0.10, y: 0.15, z: 0.35 },
+        shieldMount: { x: 0.05, y: -0.25, z: 0.0 }
+    };
+
+    
+    // Apply default pose immediately so the first frame reads correctly
+    leftShoulder.rotation.set(playerGroup.userData.pose.left.shoulderX, playerGroup.userData.pose.left.shoulderY, playerGroup.userData.pose.left.shoulderZ);
+    leftElbow.rotation.x = playerGroup.userData.pose.left.elbowX;
+
+    rightShoulder.rotation.set(playerGroup.userData.pose.right.shoulderX, playerGroup.userData.pose.right.shoulderY, playerGroup.userData.pose.right.shoulderZ);
+    rightElbow.rotation.x = playerGroup.userData.pose.right.elbowX;
+
+    swordMount.rotation.set(playerGroup.userData.pose.swordMount.x, playerGroup.userData.pose.swordMount.y, playerGroup.userData.pose.swordMount.z);
+    shieldMount.rotation.set(playerGroup.userData.pose.shieldMount.x, playerGroup.userData.pose.shieldMount.y, playerGroup.userData.pose.shieldMount.z);
+
+    // Store original colors for ALL meshes at creation time (for dragon form restore)
+    playerGroup.traverse(child => {
+        if (child.material && child.material.color) {
+            child.userData.originalColorHex = child.material.color.getHex();
+        }
+    });
+    console.log('Player created - original colors stored');
+
+scene.add(playerGroup);
     return playerGroup;
 }
+
 
 // ===== CREATE ENEMY FACE TEXTURES =====
 function createOniFaceTexture() {
@@ -2481,6 +2828,7 @@ function createEnemy(type = 'grunt') {
             damage = 5;
             points = 75;
             createFoxSpirit(enemyGroup);
+            enemyGroup.scale.set(2, 2, 2); // Make fox spirit twice the size
             break;
         case 'tank':
             health = 60;
@@ -3087,6 +3435,7 @@ function startGame() {
     try {
         console.log('Starting game...');
         gameState = 'playing';
+        isPaused = false;
 
         // Initialize audio on first user interaction
         if (!audioManager) {
@@ -3113,6 +3462,10 @@ function startGame() {
             powerMult: 1.0,
             isJumping: false,
             velocity: new THREE.Vector3(),
+            animTime: 0,
+            spacePressed: false,
+            isAttackingNow: false,
+            attackAnimTime: 0,
             isAttacking: false,
             attackCooldown: 0,
             isBlocking: false,
@@ -3209,7 +3562,7 @@ function startGame() {
         soundBtn.style.display = 'flex';
         // Update button state based on current audio state
         const isMuted = audioManager && audioManager.muted;
-        soundBtn.textContent = isMuted ? '🔇' : '🔊';
+        soundBtn.textContent = isMuted ? "🔇" : "🔊";
         if (isMuted) {
             soundBtn.classList.add('muted');
         } else {
@@ -3251,11 +3604,485 @@ if (window.__samuraiUpdateBattleButton) {
     window.__samuraiUpdateBattleButton(true);
 }
 
+// ===== PAUSE MENU FUNCTIONS =====
+function pauseGame() {
+    isPaused = true;
+    pauseMenuSelection = 0; // Default to Continue
+    document.body.style.cursor = 'default';
+
+    // Show pause menu
+    const pauseMenu = document.getElementById('pause-menu');
+    if (pauseMenu) {
+        pauseMenu.classList.remove('hidden');
+    }
+    updatePauseMenuUI();
+    console.log('Game paused');
+}
+
+function resumeGame() {
+    isPaused = false;
+    document.body.style.cursor = 'none';
+
+    // Hide pause menu
+    const pauseMenu = document.getElementById('pause-menu');
+    if (pauseMenu) {
+        pauseMenu.classList.add('hidden');
+    }
+    console.log('Game resumed');
+}
+
+function saveAndExit() {
+    const saveData = createSaveData();
+    const saves = getSaves();
+
+    if (saves.length >= MAX_SAVES) {
+        // Need to replace a save - show replace screen
+        pendingSaveData = saveData;
+        showReplaceSaveScreen();
+    } else {
+        // Can add new save
+        saves.unshift(saveData);
+        localStorage.setItem('samuraiBobSaves', JSON.stringify(saves));
+        console.log('Game saved:', saveData);
+        goToMainMenu();
+    }
+}
+
+function exitWithoutSaving() {
+    goToMainMenu();
+}
+
+function goToMainMenu() {
+    isPaused = false;
+    gameState = 'menu';
+
+    // Hide all game-related screens
+    const pauseMenu = document.getElementById('pause-menu');
+    if (pauseMenu) {
+        pauseMenu.classList.add('hidden');
+    }
+
+    document.getElementById('game-screen').classList.add('hidden');
+    document.getElementById('newgame-prompt').classList.add('hidden');
+    document.getElementById('saves-screen').classList.add('hidden');
+    document.getElementById('replace-save-screen').classList.add('hidden');
+
+    // Show main menu
+    document.getElementById('title-screen').classList.remove('hidden');
+    document.body.style.cursor = 'default';
+
+    // Show sound button
+    const soundBtn = document.getElementById('sound-toggle');
+    if (soundBtn) {
+        soundBtn.style.display = 'flex';
+    }
+
+    // Reset menu selection
+    mainMenuSelection = 0;
+    updateMainMenuUI();
+
+    console.log('Returned to main menu');
+}
+
+// ===== SAVE SYSTEM =====
+function createSaveData() {
+    return {
+        timestamp: Date.now(),
+        date: new Date().toLocaleDateString(),
+        time: new Date().toLocaleTimeString(),
+        gameTimer: gameTimer,
+        score: playerStats.score,
+        kills: playerStats.kills,
+        health: playerStats.health,
+        speedMult: playerStats.speedMult,
+        powerMult: playerStats.powerMult
+    };
+}
+
+function getSaves() {
+    return JSON.parse(localStorage.getItem('samuraiBobSaves') || '[]');
+}
+
+function loadGame(saveIndex) {
+    const saves = getSaves();
+    if (saves[saveIndex]) {
+        const save = saves[saveIndex];
+        gameTimer = save.gameTimer || 0;
+        playerStats.score = save.score || 0;
+        playerStats.kills = save.kills || 0;
+        playerStats.health = save.health || 100;
+        playerStats.speedMult = save.speedMult || 1;
+        playerStats.powerMult = save.powerMult || 1;
+        console.log('Game loaded from save', saveIndex);
+        return true;
+    }
+    return false;
+}
+
+function onBattleRoyaleClick() {
+    const saves = getSaves();
+    if (saves.length > 0) {
+        // Has saves - show prompt
+        document.getElementById('title-screen').classList.add('hidden');
+        document.getElementById('newgame-prompt').classList.remove('hidden');
+        newGamePromptSelection = 0;
+        updateNewGamePromptUI();
+    } else {
+        // No saves - start new game directly
+        startNewGame();
+    }
+}
+
+function updateNewGamePromptUI() {
+    const buttons = document.querySelectorAll('#newgame-prompt .prompt-buttons .menu-button');
+    console.log('Updating new game prompt UI, selection:', newGamePromptSelection);
+
+    buttons.forEach((btn, index) => {
+        if (index === newGamePromptSelection) {
+            btn.classList.add('selected');
+        } else {
+            btn.classList.remove('selected');
+        }
+    });
+}
+
+function selectNewGamePromptItem() {
+    if (newGamePromptSelection === 0) {
+        startNewGame();
+    } else {
+        showSaveSlots();
+    }
+}
+
+function hideNewGamePrompt() {
+    document.getElementById('newgame-prompt').classList.add('hidden');
+    document.getElementById('title-screen').classList.remove('hidden');
+}
+
+function startNewGame() {
+    document.getElementById('newgame-prompt').classList.add('hidden');
+    document.getElementById('title-screen').classList.add('hidden');
+    window.requestSamuraiStartGame();
+}
+
+function showSaveSlots() {
+    document.getElementById('newgame-prompt').classList.add('hidden');
+    document.getElementById('saves-screen').classList.remove('hidden');
+    saveSlotSelection = 0;
+    renderSaveSlots();
+    updateSaveSlotsUI();
+}
+
+function updateSaveSlotsUI() {
+    const saves = getSaves();
+    const slots = document.querySelectorAll('#save-slots-list .save-slot');
+    const backBtn = document.getElementById('back-to-prompt');
+
+    slots.forEach((slot, index) => {
+        if (index === saveSlotSelection) {
+            slot.classList.add('selected');
+        } else {
+            slot.classList.remove('selected');
+        }
+    });
+
+    // Back button is the last item
+    if (backBtn) {
+        if (saveSlotSelection === saves.length) {
+            backBtn.classList.add('selected');
+        } else {
+            backBtn.classList.remove('selected');
+        }
+    }
+}
+
+function selectSaveSlotItem() {
+    const saves = getSaves();
+    if (saveSlotSelection < saves.length) {
+        // Selected a save slot
+        continueGame(saveSlotSelection);
+    } else {
+        // Selected back button
+        backToPrompt();
+    }
+}
+
+function backToPrompt() {
+    document.getElementById('saves-screen').classList.add('hidden');
+    document.getElementById('newgame-prompt').classList.remove('hidden');
+}
+
+function renderSaveSlots() {
+    const saves = getSaves();
+    const container = document.getElementById('save-slots-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+    saves.forEach((save, index) => {
+        const slot = document.createElement('button');
+        slot.className = 'save-slot';
+        slot.innerHTML = `
+            <div class="save-slot-info">
+                <span class="save-slot-number">Slot ${index + 1}</span>
+                <span class="save-date">${save.date}</span>
+                <span class="save-time">${save.time}</span>
+            </div>
+            <div class="save-stats">
+                <span>Score: ${save.score}</span>
+                <span>Kills: ${save.kills}</span>
+            </div>
+        `;
+        slot.onclick = () => continueGame(index);
+        container.appendChild(slot);
+    });
+
+    if (saves.length === 0) {
+        container.innerHTML = '<p style="color: rgba(255,255,255,0.5);">No saved games</p>';
+    }
+}
+
+function showReplaceSaveScreen() {
+    // Hide pause menu, show replace screen
+    document.getElementById('pause-menu').classList.add('hidden');
+    document.getElementById('game-screen').classList.add('hidden');
+    document.getElementById('replace-save-screen').classList.remove('hidden');
+    document.body.style.cursor = 'default';
+
+    renderReplaceSaveSlots();
+}
+
+function renderReplaceSaveSlots() {
+    const saves = getSaves();
+    const container = document.getElementById('replace-slots-list');
+    if (!container) return;
+
+    container.innerHTML = '';
+    saves.forEach((save, index) => {
+        const slot = document.createElement('button');
+        slot.className = 'save-slot';
+        slot.innerHTML = `
+            <div class="save-slot-info">
+                <span class="save-slot-number">Slot ${index + 1}</span>
+                <span class="save-date">${save.date}</span>
+                <span class="save-time">${save.time}</span>
+            </div>
+            <div class="save-stats">
+                <span>Score: ${save.score}</span>
+                <span>Kills: ${save.kills}</span>
+            </div>
+        `;
+        slot.onclick = () => replaceSave(index);
+        container.appendChild(slot);
+    });
+}
+
+function replaceSave(index) {
+    if (!pendingSaveData) return;
+
+    const saves = getSaves();
+    saves[index] = pendingSaveData;
+    localStorage.setItem('samuraiBobSaves', JSON.stringify(saves));
+    console.log('Replaced save slot', index, 'with:', pendingSaveData);
+
+    pendingSaveData = null;
+    document.getElementById('replace-save-screen').classList.add('hidden');
+    goToMainMenu();
+}
+
+function cancelReplaceSave() {
+    pendingSaveData = null;
+    document.getElementById('replace-save-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+    document.getElementById('pause-menu').classList.remove('hidden');
+    document.body.style.cursor = 'default';
+}
+
+function continueGame(saveIndex) {
+    if (loadGame(saveIndex)) {
+        document.getElementById('saves-screen').classList.add('hidden');
+        startGameFromSave();
+    }
+}
+
+function startGameFromSave() {
+    console.log('Starting game from save...');
+    gameState = 'playing';
+    isPaused = false;
+
+    // Hide menu, show game
+    document.getElementById('title-screen').classList.add('hidden');
+    document.getElementById('game-screen').classList.remove('hidden');
+    document.body.style.cursor = 'none';
+
+    // Initialize if needed
+    if (!renderer) {
+        startGame();
+        return;
+    }
+
+    // Reset player position but keep stats from save
+    if (player) {
+        player.position.set(0, 0, 0);
+        playerStats.velocity = { x: 0, y: 0, z: 0 };
+    }
+
+    // Clear existing enemies
+    enemies.forEach(enemy => {
+        scene.remove(enemy);
+    });
+    enemies.length = 0;
+
+    // Update HUD
+    updateHUD();
+
+    // Resume animation loop
+    animate();
+}
+
+// ===== MAIN MENU NAVIGATION =====
+function getMainMenuButtons() {
+    return [
+        document.getElementById('battle-royale-button'),
+        document.getElementById('campaign-button'),
+        document.getElementById('settings-button'),
+        document.getElementById('sound-toggle')
+    ];
+}
+
+function updateMainMenuUI() {
+    const buttons = getMainMenuButtons();
+    console.log('Updating main menu UI, selection:', mainMenuSelection);
+
+    buttons.forEach((btn, index) => {
+        if (btn) {
+            if (index === mainMenuSelection) {
+                btn.classList.add('selected');
+                console.log('Selected button', index, btn.id);
+            } else {
+                btn.classList.remove('selected');
+            }
+        }
+    });
+}
+
+function selectMainMenuItem() {
+    switch (mainMenuSelection) {
+        case 0: // Battle Royale
+            onBattleRoyaleClick();
+            break;
+        case 1: // Campaign (disabled - do nothing)
+            console.log('Campaign coming soon!');
+            break;
+        case 2: // Settings
+            document.getElementById('title-screen').classList.add('hidden');
+            document.getElementById('settings-screen').classList.remove('hidden');
+            break;
+        case 3: // Volume toggle
+            const soundBtn = document.getElementById('sound-toggle');
+            if (soundBtn) {
+                soundBtn.click();
+            }
+            break;
+    }
+}
+
+function initMainMenu() {
+    mainMenuSelection = 0;
+    updateMainMenuUI();
+
+    // Show sound button on main menu
+    const soundBtn = document.getElementById('sound-toggle');
+    if (soundBtn) {
+        soundBtn.style.display = 'flex';
+    }
+
+    // Add hover handlers to sync with keyboard selection
+    const buttons = getMainMenuButtons();
+
+    buttons.forEach((btn, index) => {
+        if (btn) {
+            btn.addEventListener('mouseenter', () => {
+                mainMenuSelection = index;
+                updateMainMenuUI();
+            });
+        }
+    });
+}
+
+// Expose save functions globally
+window.onBattleRoyaleClick = onBattleRoyaleClick;
+window.hideNewGamePrompt = hideNewGamePrompt;
+window.startNewGame = startNewGame;
+window.showSaveSlots = showSaveSlots;
+window.backToPrompt = backToPrompt;
+window.continueGame = continueGame;
+window.getSaves = getSaves;
+window.cancelReplaceSave = cancelReplaceSave;
+window.initMainMenu = initMainMenu;
+
+function updatePauseMenuUI() {
+    const continueBtn = document.getElementById('pause-continue');
+    const saveExitBtn = document.getElementById('pause-save-exit');
+    const exitBtn = document.getElementById('pause-exit');
+
+    const buttons = [continueBtn, saveExitBtn, exitBtn];
+    buttons.forEach((btn, index) => {
+        if (btn) {
+            if (index === pauseMenuSelection) {
+                btn.classList.add('selected');
+            } else {
+                btn.classList.remove('selected');
+            }
+        }
+    });
+}
+
+// Add click handlers for pause menu buttons
+document.addEventListener('DOMContentLoaded', () => {
+    const continueBtn = document.getElementById('pause-continue');
+    const saveExitBtn = document.getElementById('pause-save-exit');
+    const exitBtn = document.getElementById('pause-exit');
+
+    if (continueBtn) {
+        continueBtn.addEventListener('click', resumeGame);
+        continueBtn.addEventListener('mouseenter', () => {
+            pauseMenuSelection = 0;
+            updatePauseMenuUI();
+        });
+    }
+
+    if (saveExitBtn) {
+        saveExitBtn.addEventListener('click', saveAndExit);
+        saveExitBtn.addEventListener('mouseenter', () => {
+            pauseMenuSelection = 1;
+            updatePauseMenuUI();
+        });
+    }
+
+    if (exitBtn) {
+        exitBtn.addEventListener('click', exitWithoutSaving);
+        exitBtn.addEventListener('mouseenter', () => {
+            pauseMenuSelection = 2;
+            updatePauseMenuUI();
+        });
+    }
+});
+
 // ===== GAME LOOP =====
 function animate() {
     if (gameState !== 'playing') return;
 
     deltaTime = clock.getDelta();
+
+    // If paused, only render - don't update game logic
+    if (isPaused) {
+        render();
+        renderDamageNumbers();
+        renderComboCounter();
+        renderEnemyHealthBars();
+        requestAnimationFrame(animate);
+        return;
+    }
 
     // Check hit stop - if active, only update visuals, not game logic
     if (!updateHitStop()) {
@@ -3379,7 +4206,7 @@ function updatePlayer() {
     if (playerStats.attackCooldown > 0) {
         playerStats.attackCooldown -= deltaTime;
     }
-    
+
     // Decrease ability cooldowns
     if (playerStats.fireBreathCooldown > 0) {
         playerStats.fireBreathCooldown -= deltaTime;
@@ -3387,7 +4214,7 @@ function updatePlayer() {
     if (playerStats.windGustCooldown > 0) {
         playerStats.windGustCooldown -= deltaTime;
     }
-    
+
     // Update ability timer
     if (playerStats.currentAbility) {
         playerStats.abilityTimer -= deltaTime;
@@ -3404,108 +4231,61 @@ function updatePlayer() {
         return;
     }
 
-    // Simple instant movement (WASD or Arrow keys)
-    const moveSpeed = playerStats.speed * playerStats.speedMult * deltaTime;
-    const moveDirection = new THREE.Vector3();
+    // =====================
+    // Movement (smooth, less "brick")
+    // =====================
+    const maxSpeed = playerStats.speed * playerStats.speedMult;
+    const input = new THREE.Vector3();
 
-    if (keys['w'] || keys['arrowup']) moveDirection.z -= 1;
-    if (keys['s'] || keys['arrowdown']) moveDirection.z += 1;
-    if (keys['a'] || keys['arrowleft']) moveDirection.x -= 1;
-    if (keys['d'] || keys['arrowright']) moveDirection.x += 1;
+    if (keys['w'] || keys['arrowup']) input.z -= 1;
+    if (keys['s'] || keys['arrowdown']) input.z += 1;
+    if (keys['a'] || keys['arrowleft']) input.x -= 1;
+    if (keys['d'] || keys['arrowright']) input.x += 1;
 
-    if (moveDirection.lengthSq() > 0) {
-        moveDirection.normalize();
-        player.position.x += moveDirection.x * moveSpeed;
-        player.position.z += moveDirection.z * moveSpeed;
-        player.rotation.y = Math.atan2(moveDirection.x, moveDirection.z);
+    if (input.lengthSq() > 0) input.normalize();
+
+    const targetVelX = input.x * maxSpeed;
+    const targetVelZ = input.z * maxSpeed;
+
+    const accelLambda = input.lengthSq() > 0 ? 18 : 28; // decelerate faster when no input
+    playerStats.velocity.x = damp(playerStats.velocity.x, targetVelX, accelLambda, deltaTime);
+    playerStats.velocity.z = damp(playerStats.velocity.z, targetVelZ, accelLambda, deltaTime);
+
+    // Apply movement
+    player.position.x += playerStats.velocity.x * deltaTime;
+    player.position.z += playerStats.velocity.z * deltaTime;
+
+    // Smooth facing direction based on movement velocity
+    const planarSpeed = Math.sqrt(playerStats.velocity.x * playerStats.velocity.x + playerStats.velocity.z * playerStats.velocity.z);
+    if (planarSpeed > 0.15) {
+        const targetYaw = Math.atan2(playerStats.velocity.x, playerStats.velocity.z);
+        player.rotation.y = dampAngle(player.rotation.y, targetYaw, 16, deltaTime);
     }
 
-    // Space bar = attack (drops shield while attacking)
+    // Space bar and mouse click both trigger attacks.
+    // Space bar handling for key repeat prevention.
     if (keys[' '] && !playerStats.spacePressed && playerStats.attackCooldown <= 0) {
         playerStats.spacePressed = true;
-        playerStats.isAttackingNow = true;
-        playerStats.attackAnimTime = 0;
         playerAttack();
-        // Attack animation lasts 400ms
-        setTimeout(() => { playerStats.isAttackingNow = false; }, 400);
     }
     if (!keys[' ']) playerStats.spacePressed = false;
 
-    // Track attack animation time
+    // Track attack animation time (shared by both key and mouse attacks)
     if (playerStats.isAttackingNow) {
         playerStats.attackAnimTime = (playerStats.attackAnimTime || 0) + deltaTime;
+        const attackDuration = 0.42;
+        if (playerStats.attackAnimTime >= attackDuration) {
+            playerStats.isAttackingNow = false;
+            playerStats.attackAnimTime = 0;
+        }
     }
 
     // Shift = shield block (but not while attacking)
     const wantsBlock = keys['shift'] && !playerStats.isAttackingNow;
     playerStats.isBlocking = wantsBlock;
 
-    // === ANIMATE LEFT ARM - position joints and rebuild arm segments ===
-    if (player.userData.leftElbow && player.userData.leftHand && player.userData.shield) {
-        const shoulderPos = new THREE.Vector3(0, 0, 0);
-        let elbowPos, handPos, shieldPos, shieldRotY, shieldRotX;
-
-        if (playerStats.isBlocking) {
-            // BLOCKING: Arm reaches across body, shield in front of chest
-            elbowPos = new THREE.Vector3(0.5, -0.15, 0.5);
-            handPos = new THREE.Vector3(1.0, 0.1, 0.9);
-            shieldPos = new THREE.Vector3(1.1, 0.15, 1.1);
-            shieldRotY = 0.2;
-            shieldRotX = 0;
-        } else {
-            // RESTING: Shield held at side like reference image
-            elbowPos = new THREE.Vector3(-0.3, -0.5, 0.3);
-            handPos = new THREE.Vector3(-0.5, -0.9, 0.6);
-            shieldPos = new THREE.Vector3(-0.6, -0.85, 0.75);
-            shieldRotY = -0.25;
-            shieldRotX = 0.05;
-        }
-
-        // Position joints
-        player.userData.leftElbow.position.copy(elbowPos);
-        player.userData.leftHand.position.copy(handPos);
-        player.userData.shield.position.copy(shieldPos);
-        player.userData.shield.rotation.y = shieldRotY;
-        player.userData.shield.rotation.x = shieldRotX;
-
-        // Remove old arm segments
-        if (player.userData.leftUpperArmMesh) {
-            player.userData.leftArm.remove(player.userData.leftUpperArmMesh);
-        }
-        if (player.userData.leftForearmMesh) {
-            player.userData.leftArm.remove(player.userData.leftForearmMesh);
-        }
-
-        // Create new arm segments connecting the joints
-        const createSeg = player.userData.createArmSegment;
-        const blueMat = player.userData.kimonoBlue;
-        const skinMat = player.userData.skin;
-
-        player.userData.leftUpperArmMesh = createSeg(shoulderPos, elbowPos, 0.24, 0.2, blueMat);
-        player.userData.leftForearmMesh = createSeg(elbowPos, handPos, 0.2, 0.16, skinMat || blueMat);
-
-        if (player.userData.leftUpperArmMesh) {
-            player.userData.leftArm.add(player.userData.leftUpperArmMesh);
-        }
-        if (player.userData.leftForearmMesh) {
-            player.userData.leftArm.add(player.userData.leftForearmMesh);
-        }
-    }
-
-    // === ANIMATE RIGHT ARM (sword arm) ===
-    if (player.userData.rightArm) {
-        if (playerStats.isAttackingNow) {
-            // Swing sword arm forward in an arc
-            const t = (playerStats.attackAnimTime || 0) / 0.4; // 0 to 1 over 400ms
-            const swingAngle = Math.sin(t * Math.PI) * 1.8; // Arc swing
-            player.userData.rightArm.rotation.x = -swingAngle;
-            player.userData.rightArm.rotation.z = -0.3 - swingAngle * 0.3;
-        } else {
-            // Relaxed position - arm slightly raised with sword
-            player.userData.rightArm.rotation.x = -0.2;
-            player.userData.rightArm.rotation.z = 0;
-        }
-    }
+    // Animate rig (walk + idle + attack + block)
+    animatePlayerRig(deltaTime);
 
     // Gravity
     playerStats.velocity.y -= 50 * deltaTime;
@@ -3525,6 +4305,17 @@ function updatePlayer() {
         pos2D.setLength(radiusClamp);
         player.position.x = pos2D.x;
         player.position.z = pos2D.y;
+
+        // Cancel outward velocity so we do not jitter against the clamp
+        const outward = new THREE.Vector2(pos2D.x, pos2D.y).normalize();
+        const v2 = new THREE.Vector2(playerStats.velocity.x, playerStats.velocity.z);
+        const outMag = v2.dot(outward);
+        if (outMag > 0) {
+            v2.x += outward.x * (-outMag);
+            v2.y += outward.y * (-outMag);
+            playerStats.velocity.x = v2.x;
+            playerStats.velocity.z = v2.y;
+        }
     }
 
     // Update camera
@@ -3534,15 +4325,198 @@ function updatePlayer() {
 function updateCamera() {
     if (!player) return;
 
-    // Fixed camera behind and above player - instant follow
-    const offset = new THREE.Vector3(0, 12, 16);
-    camera.position.copy(player.position).add(offset);
+    // Slightly closer and smoother camera to match the reference framing
+    const desiredOffset = new THREE.Vector3(0, 11.5, 15.5);
+    const desiredPos = player.position.clone().add(desiredOffset).add(screenShake.offset);
 
-    // Apply screen shake
-    camera.position.add(screenShake.offset);
+    if (!camera.userData.followPos) {
+        camera.userData.followPos = desiredPos.clone();
+    }
+    camera.userData.followPos.x = damp(camera.userData.followPos.x, desiredPos.x, 6, deltaTime);
+    camera.userData.followPos.y = damp(camera.userData.followPos.y, desiredPos.y, 6, deltaTime);
+    camera.userData.followPos.z = damp(camera.userData.followPos.z, desiredPos.z, 6, deltaTime);
 
-    camera.lookAt(player.position);
+    camera.position.copy(camera.userData.followPos);
+
+    const desiredLookAt = player.position.clone();
+    desiredLookAt.y += 2.2;
+
+    if (!camera.userData.lookAt) {
+        camera.userData.lookAt = desiredLookAt.clone();
+    }
+    camera.userData.lookAt.x = damp(camera.userData.lookAt.x, desiredLookAt.x, 10, deltaTime);
+    camera.userData.lookAt.y = damp(camera.userData.lookAt.y, desiredLookAt.y, 10, deltaTime);
+    camera.userData.lookAt.z = damp(camera.userData.lookAt.z, desiredLookAt.z, 10, deltaTime);
+
+    camera.lookAt(camera.userData.lookAt);
 }
+
+// Rig animation lives here so gameplay code stays clean
+function animatePlayerRig(dt) {
+    if (!player || !player.userData) return;
+
+    const rigOk =
+        player.userData.model &&
+        player.userData.leftShoulder && player.userData.leftElbow &&
+        player.userData.rightShoulder && player.userData.rightElbow &&
+        player.userData.leftHip && player.userData.rightHip &&
+        player.userData.swordMount && player.userData.shieldMount;
+
+    if (!rigOk) return;
+
+    const model = player.userData.model;
+
+    const vx = playerStats.velocity.x || 0;
+    const vz = playerStats.velocity.z || 0;
+    const speed = Math.sqrt(vx * vx + vz * vz);
+    const maxSpeed = Math.max(0.001, playerStats.speed * playerStats.speedMult);
+    const moveAmt = THREE.MathUtils.clamp(speed / maxSpeed, 0, 1);
+
+    // Advance animation time with speed
+    playerStats.animTime = (playerStats.animTime || 0) + dt * (2.2 + moveAmt * 8.5);
+    const t = playerStats.animTime;
+
+    const walkSin = Math.sin(t);
+    const walkSin2 = Math.sin(t * 2);
+    const walkCos = Math.cos(t);
+
+    // Body bob and sway
+    const bobTarget = (walkSin * 0.10 + walkSin2 * 0.03) * moveAmt;
+    model.position.y = damp(model.position.y, bobTarget, 14, dt);
+
+    const swayZ = walkCos * 0.08 * moveAmt;
+    model.rotation.z = damp(model.rotation.z, swayZ, 14, dt);
+
+    const leanX = -walkCos * 0.04 * moveAmt;
+    model.rotation.x = damp(model.rotation.x, leanX, 14, dt);
+
+    // Legs
+    const legSwing = walkSin * 0.95 * moveAmt;
+    player.userData.leftHip.rotation.x = damp(player.userData.leftHip.rotation.x, legSwing, 18, dt);
+    player.userData.rightHip.rotation.x = damp(player.userData.rightHip.rotation.x, -legSwing, 18, dt);
+
+    // Base arm swing (reduced because we have a shield and sword)
+    const baseLeft = (player.userData.pose && player.userData.pose.left) ? player.userData.pose.left : { shoulderX: -0.35, shoulderY: 0.15, shoulderZ: 0.55, elbowX: -1.05 };
+    const baseRight = (player.userData.pose && player.userData.pose.right) ? player.userData.pose.right : { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 };
+    const baseSwordMount = (player.userData.pose && player.userData.pose.swordMount) ? player.userData.pose.swordMount : { x: -0.10, y: 0.15, z: 0.35 };
+    const baseShieldMount = (player.userData.pose && player.userData.pose.shieldMount) ? player.userData.pose.shieldMount : { x: 0.05, y: -0.25, z: 0.0 };
+
+    let leftShoulderX = baseLeft.shoulderX + walkSin * 0.20 * moveAmt;
+    let leftShoulderY = baseLeft.shoulderY;
+    let leftShoulderZ = baseLeft.shoulderZ;
+    let leftElbowX = baseLeft.elbowX;
+
+    let rightShoulderX = baseRight.shoulderX - walkSin * 0.45 * moveAmt;
+    let rightShoulderY = baseRight.shoulderY;
+    let rightShoulderZ = baseRight.shoulderZ;
+    let rightElbowX = baseRight.elbowX;
+
+    // Default mounts
+    let shieldMountX = baseShieldMount.x;
+    let shieldMountY = baseShieldMount.y;
+    let shieldMountZ = baseShieldMount.z;
+
+    let swordMountX = baseSwordMount.x;
+    let swordMountY = baseSwordMount.y;
+    let swordMountZ = baseSwordMount.z;
+
+    // Blocking pose overrides walk
+    if (playerStats.isBlocking) {
+        // Bring shield across the chest, tuck sword arm slightly
+        leftShoulderX = -0.85;
+        leftShoulderY = 0.25;
+        leftShoulderZ = 0.95;
+        leftElbowX = -0.55;
+
+        shieldMountY = 0.05;
+        shieldMountX = 0.00;
+        shieldMountZ = 0.0;
+
+        rightShoulderX = -0.05;
+        rightShoulderY = -0.25;
+        rightShoulderZ = -0.25;
+        rightElbowX = -0.65;
+
+        swordMountZ = 0.25;
+    }
+
+    // Attack pose overrides blocking
+    if (playerStats.isAttackingNow) {
+        const attackDuration = 0.42;
+        const p = THREE.MathUtils.clamp((playerStats.attackAnimTime || 0) / attackDuration, 0, 1);
+
+        // 3-phase attack: wind-up -> slash -> recover
+        let shoulderY = 0;
+        let shoulderX = 0;
+        let shoulderZ = 0;
+        let elbowX = 0;
+        let swordZ = 0;
+
+        if (p < 0.28) {
+            const w = easeInOutCubic(p / 0.28);
+            shoulderY = THREE.MathUtils.lerp(-0.15, -1.05, w);
+            shoulderX = THREE.MathUtils.lerp(-0.15, -0.65, w);
+            shoulderZ = THREE.MathUtils.lerp(-0.40, -0.75, w);
+            elbowX = THREE.MathUtils.lerp(-0.75, -1.15, w);
+            swordZ = THREE.MathUtils.lerp(0.35, 0.65, w);
+        } else if (p < 0.62) {
+            const s = easeInOutCubic((p - 0.28) / (0.62 - 0.28));
+            shoulderY = THREE.MathUtils.lerp(-1.05, 1.35, s);
+            shoulderX = THREE.MathUtils.lerp(-0.65, -1.15, s);
+            shoulderZ = THREE.MathUtils.lerp(-0.75, 0.25, s);
+            elbowX = THREE.MathUtils.lerp(-1.15, -0.20, s);
+            swordZ = THREE.MathUtils.lerp(0.65, -1.20, s);
+        } else {
+            const r = easeInOutCubic((p - 0.62) / (1 - 0.62));
+            shoulderY = THREE.MathUtils.lerp(1.35, baseRight.shoulderY, r);
+            shoulderX = THREE.MathUtils.lerp(-1.15, baseRight.shoulderX, r);
+            shoulderZ = THREE.MathUtils.lerp(0.25, baseRight.shoulderZ, r);
+            elbowX = THREE.MathUtils.lerp(-0.20, baseRight.elbowX, r);
+            swordZ = THREE.MathUtils.lerp(-1.20, baseSwordMount.z, r);
+        }
+
+        rightShoulderY = shoulderY;
+        rightShoulderX = shoulderX;
+        rightShoulderZ = shoulderZ;
+        rightElbowX = elbowX;
+
+        // During attack the shield arm should stay out of the way but still look held
+        leftShoulderX = -0.25;
+        leftShoulderY = 0.10;
+        leftShoulderZ = 0.55;
+        leftElbowX = -1.05;
+
+        swordMountZ = swordZ;
+    }
+
+    // Apply with smoothing so it feels physical
+    const lShoulder = player.userData.leftShoulder;
+    const lElbow = player.userData.leftElbow;
+    const rShoulder = player.userData.rightShoulder;
+    const rElbow = player.userData.rightElbow;
+
+    lShoulder.rotation.x = damp(lShoulder.rotation.x, leftShoulderX, 20, dt);
+    lShoulder.rotation.y = damp(lShoulder.rotation.y, leftShoulderY, 20, dt);
+    lShoulder.rotation.z = damp(lShoulder.rotation.z, leftShoulderZ, 20, dt);
+    lElbow.rotation.x = damp(lElbow.rotation.x, leftElbowX, 24, dt);
+
+    rShoulder.rotation.x = damp(rShoulder.rotation.x, rightShoulderX, 20, dt);
+    rShoulder.rotation.y = damp(rShoulder.rotation.y, rightShoulderY, 20, dt);
+    rShoulder.rotation.z = damp(rShoulder.rotation.z, rightShoulderZ, 20, dt);
+    rElbow.rotation.x = damp(rElbow.rotation.x, rightElbowX, 24, dt);
+
+    // Weapon lag (small delay makes it feel heavier)
+    const swordMount = player.userData.swordMount;
+    swordMount.rotation.x = damp(swordMount.rotation.x, swordMountX, 16, dt);
+    swordMount.rotation.y = damp(swordMount.rotation.y, swordMountY, 16, dt);
+    swordMount.rotation.z = damp(swordMount.rotation.z, swordMountZ, 14, dt);
+
+    const shieldMount = player.userData.shieldMount;
+    shieldMount.rotation.x = damp(shieldMount.rotation.x, shieldMountX, 16, dt);
+    shieldMount.rotation.y = damp(shieldMount.rotation.y, shieldMountY, 16, dt);
+    shieldMount.rotation.z = damp(shieldMount.rotation.z, shieldMountZ, 16, dt);
+}
+
 
 // ===== ENEMY HEALTH BARS =====
 function renderEnemyHealthBars() {
@@ -3779,6 +4753,10 @@ function updateLeafForm() {
         moveDirection.normalize();
         player.position.x += moveDirection.x * moveSpeed;
         player.position.z += moveDirection.z * moveSpeed;
+
+        // Track facing direction for leaf swoosh attack
+        playerStats.leafFacingX = moveDirection.x;
+        playerStats.leafFacingZ = moveDirection.z;
     }
     
     // Keep on platform
@@ -3828,6 +4806,11 @@ function leafSwooshAttack() {
     // Play swoosh sound
     if (audioManager) audioManager.play('swordSwing', 0.7);
 
+    // Use the stored facing direction from movement (updated every frame in updateLeafForm)
+    // Default to facing "down" (+Z) if no direction stored yet
+    const facingX = playerStats.leafFacingX !== undefined ? playerStats.leafFacingX : 0;
+    const facingZ = playerStats.leafFacingZ !== undefined ? playerStats.leafFacingZ : 1;
+
     // Damage all nearby enemies
     enemies.forEach(enemy => {
         const dist = center.distanceTo(enemy.position);
@@ -3843,27 +4826,50 @@ function leafSwooshAttack() {
         }
     });
 
-    // Create swooshing leaf particles that fly outward
-    for (let i = 0; i < 12; i++) {
-        const leafGeo = new THREE.PlaneGeometry(0.5, 0.7);
+    // Create swooshing leaves clearly IN FRONT of Bob in his facing direction
+    // facingX and facingZ are the normalized direction from movement
+    const forwardX = facingX;
+    const forwardZ = facingZ;
+    // Right direction is perpendicular (rotate 90 degrees)
+    const rightX = -facingZ;
+    const rightZ = facingX;
+
+    for (let i = 0; i < 30; i++) {
+        // Bigger leaves
+        const leafSize = 0.9 + Math.random() * 0.7;
+        const leafGeo = new THREE.PlaneGeometry(leafSize, leafSize * 1.3);
         const leafMat = new THREE.MeshBasicMaterial({
             color: Math.random() > 0.5 ? 0x44cc44 : 0x88dd44,
             side: THREE.DoubleSide,
-            transparent: true
+            transparent: true,
+            opacity: 0.95
         });
         const leaf = new THREE.Mesh(leafGeo, leafMat);
 
-        const angle = (i / 12) * Math.PI * 2;
-        leaf.position.copy(center);
-        leaf.position.y += 1.5;
-
-        leaf.userData.velocity = new THREE.Vector3(
-            Math.cos(angle) * 12,
-            (Math.random() - 0.3) * 4,
-            Math.sin(angle) * 12
+        // Start leaves IN FRONT of the player (3-5 units ahead), spread in a wall
+        const forwardOffset = 3 + Math.random() * 2; // 3-5 units in front
+        const sideOffset = (Math.random() - 0.5) * 5; // Left-right spread
+        const heightOffset = 0.3 + Math.random() * 3.5;
+        leaf.position.set(
+            center.x + forwardX * forwardOffset + rightX * sideOffset,
+            center.y + heightOffset,
+            center.z + forwardZ * forwardOffset + rightZ * sideOffset
         );
-        leaf.userData.life = 0.5;
-        leaf.userData.spinSpeed = 10 + Math.random() * 5;
+
+        // Velocity shoots forward in facing direction
+        const forwardSpeed = 22 + Math.random() * 10;
+        const sideSpread = (Math.random() - 0.5) * 4;
+        leaf.userData.velocity = new THREE.Vector3(
+            forwardX * forwardSpeed + rightX * sideSpread,
+            (Math.random() - 0.5) * 2,
+            forwardZ * forwardSpeed + rightZ * sideSpread
+        );
+
+        // Stagger the spawn timing for a swoosh effect
+        leaf.userData.delay = i * 0.008;
+        leaf.userData.life = 0.55;
+        leaf.userData.spinSpeed = 12 + Math.random() * 8;
+        leaf.visible = false; // Start hidden, reveal after delay
 
         scene.add(leaf);
         particles.push(leaf);
@@ -3934,17 +4940,26 @@ function activateDragonForm() {
             });
             const flame = new THREE.Mesh(flameGeo, flameMat);
             flame.userData.offset = (i / 12) * Math.PI * 2;
+            flame.userData.isFireAura = true; // Mark so it doesn't get color-saved
             player.add(flame);
             player.userData.fireAura.push(flame);
         }
         
-        // Tint player red/orange
+        // Tint player red/orange using the ORIGINAL colors stored at player creation
+        let tintedCount = 0;
         player.traverse(child => {
-            if (child.material && child.material.color) {
-                child.userData.originalColor = child.material.color.clone();
-                child.material.color.lerp(new THREE.Color(0xff4400), 0.3);
+            if (child.material && child.material.color && !child.userData.isFireAura) {
+                // Use originalColorHex stored when player was created
+                if (child.userData.originalColorHex !== undefined) {
+                    const originalColor = new THREE.Color(child.userData.originalColorHex);
+                    const orangeTint = new THREE.Color(0xff4400);
+                    originalColor.lerp(orangeTint, 0.4); // 40% orange tint
+                    child.material.color.copy(originalColor);
+                    tintedCount++;
+                }
             }
         });
+        console.log('Dragon form activated, tinted', tintedCount, 'meshes');
     }
 }
 
@@ -4040,22 +5055,30 @@ function updateDragonForm() {
 
 function deactivateDragonForm() {
     playerStats.isDragonForm = false;
-    
+
     if (player) {
-        // Remove fire aura
+        // Remove fire aura FIRST before restoring colors
         if (player.userData.fireAura) {
             player.userData.fireAura.forEach(flame => {
+                if (flame.geometry) flame.geometry.dispose();
+                if (flame.material) flame.material.dispose();
                 player.remove(flame);
             });
             player.userData.fireAura = [];
         }
-        
-        // Restore original colors
+
+        // Restore original colors from values stored at player creation
+        let restoredCount = 0;
         player.traverse(child => {
-            if (child.userData.originalColor && child.material) {
-                child.material.color.copy(child.userData.originalColor);
+            // Skip fire aura particles
+            if (child.userData && child.userData.isFireAura) return;
+
+            if (child.material && child.material.color && child.userData.originalColorHex !== undefined) {
+                child.material.color.setHex(child.userData.originalColorHex);
+                restoredCount++;
             }
         });
+        console.log('Dragon form deactivated, restored colors on', restoredCount, 'meshes');
     }
 }
 
@@ -4945,7 +5968,10 @@ function playerAttack() {
     if (playerStats.attackCooldown > 0 || !player) return;
 
     playerStats.attackCooldown = 0.5;
-    playerStats.isAttacking = true;
+
+    // Drive the visible animation from a single state
+    playerStats.isAttackingNow = true;
+    playerStats.attackAnimTime = 0;
 
     // Play sword swing sound
     if (audioManager) {
@@ -4955,21 +5981,12 @@ function playerAttack() {
     // Reset sword trail for fresh swing
     swordTrailPoints = [];
 
-    // Sword swing animation
-    if (player.userData.sword) {
-        const sword = player.userData.sword;
-        sword.rotation.z = -Math.PI / 2;
-        setTimeout(() => {
-            if (sword) sword.rotation.z = Math.PI / 4;
-        }, 200);
-    }
-
     // Create visible sword slash arc
     createSwordSlash();
 
     // Attack hitbox (wider cone in front of player)
     const attackRange = 6;
-    const attackAngle = Math.PI / 2; // 90 degree cone - wider swing
+    const attackAngle = Math.PI / 2; // 90 degree cone
 
     let hitCount = 0;
     enemies.forEach(enemy => {
@@ -4986,18 +6003,18 @@ function playerAttack() {
             if (dot > Math.cos(attackAngle / 2)) {
                 hitCount++;
 
-                // Hit! - Increased damage
+                // Hit!
                 const damage = 35 * playerStats.powerMult;
                 damageEnemy(enemy, damage, true);
 
-                // Strong knockback
+                // Knockback
                 const knockback = toEnemy.clone().multiplyScalar(10);
                 enemy.position.add(knockback);
 
-                // Longer stun
+                // Stun
                 enemy.userData.stunned = 1.5;
 
-                // Create enhanced hit particles with direction
+                // Hit particles with direction
                 createHitParticles(enemy.position, toEnemy.clone().negate());
             }
         }
@@ -5007,11 +6024,8 @@ function playerAttack() {
     if (hitCount > 1) {
         triggerScreenShake(0.3 * hitCount, 0.1);
     }
-
-    setTimeout(() => {
-        playerStats.isAttacking = false;
-    }, 200);
 }
+
 
 function createSwordSlash() {
     // Create a visible arc slash effect
@@ -5336,6 +6350,16 @@ function createDeathParticles(position, enemyType = 'grunt') {
 function updateParticles() {
     for (let i = particles.length - 1; i >= 0; i--) {
         const particle = particles[i];
+
+        // Handle delayed particles (for swoosh effects)
+        if (particle.userData.delay > 0) {
+            particle.userData.delay -= deltaTime;
+            if (particle.userData.delay <= 0) {
+                particle.visible = true; // Reveal after delay
+            }
+            continue; // Skip movement until delay is over
+        }
+
         particle.userData.life -= deltaTime;
 
         if (particle.userData.life <= 0) {
@@ -5355,6 +6379,12 @@ function updateParticles() {
             } else {
                 // Normal particles have gravity
                 particle.userData.velocity.y -= 15 * deltaTime;
+
+                // Spin effect for leaves
+                if (particle.userData.spinSpeed) {
+                    particle.rotation.x += particle.userData.spinSpeed * deltaTime;
+                    particle.rotation.z += particle.userData.spinSpeed * 0.7 * deltaTime;
+                }
 
                 // Fade out
                 if (particle.material) {
@@ -5520,7 +6550,7 @@ function toggleSound() {
         console.log('Sound toggled by user, muted:', muted);
         const btn = document.getElementById('sound-toggle');
         if (btn) {
-            btn.textContent = muted ? '🔇' : '🔊';
+            btn.textContent = muted ? "🔇" : "🔊";
             btn.classList.toggle('muted', muted);
         }
     }
