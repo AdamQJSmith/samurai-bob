@@ -6134,8 +6134,8 @@ function playerAttack() {
     // Create visible sword slash arc (direction-aware)
     createSwordSlash(playerStats.attackSwingIndex);
 
-    // Attack hitbox (wider cone in front of player)
-    const attackRange = 6;
+    // Attack hitbox (matches woosh visual)
+    const attackRange = 7;
     const attackAngle = Math.PI / 2; // 90 degree cone
 
     let hitCount = 0;
@@ -6188,15 +6188,15 @@ function createSwordSlash(swingIndex = 0) {
     // swing 1: sweeps from Bob's left to his right
     const sweepDir = (swing === 0) ? 1 : -1;
 
-    // Create the slash arc
-    const arcRadius = 3.5;
-    const arcSpan = Math.PI * 0.6; // 108 degree arc
+    // Create the slash arc - matches attack range
+    const arcRadius = 7;
+    const arcSpan = Math.PI * 0.5; // 90 degree arc (matches attackAngle)
 
     // Create multiple trail layers for the swoosh effect
     for (let layer = 0; layer < 5; layer++) {
         const trailShape = new THREE.Shape();
-        const innerR = arcRadius - 0.3 - layer * 0.2;
-        const outerR = arcRadius + 0.1 - layer * 0.1;
+        const innerR = arcRadius - 0.5 - layer * 0.3;
+        const outerR = arcRadius + 0.2 - layer * 0.15;
 
         // Draw arc centered at 0 (will be rotated to face forward)
         const halfArc = arcSpan / 2;
@@ -6217,11 +6217,9 @@ function createSwordSlash(swingIndex = 0) {
         slashGroup.add(trailMesh);
     }
 
-    // Position in front of player
+    // Position at player (arc radius matches attack range)
     slashGroup.position.copy(player.position);
     slashGroup.position.y += 2;
-    slashGroup.position.x += Math.sin(player.rotation.y) * 2.5;
-    slashGroup.position.z += Math.cos(player.rotation.y) * 2.5;
 
     // Arc sweeps across in front of Bob
     // Start on one side, end on the other side, always in front
