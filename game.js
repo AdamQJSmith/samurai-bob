@@ -2058,7 +2058,7 @@ function createPlayer() {
 
     // LEFT ARM (shield)
     const leftShoulder = new THREE.Group();
-    leftShoulder.position.set(-0.95, 1.75, 0.22);
+    leftShoulder.position.set(-1.50, 1.75, 0.22);
     model.add(leftShoulder);
 
     const leftUpperArmGeo = new THREE.CylinderGeometry(0.24, 0.28, ARM_UPPER_LEN, 6);
@@ -2117,7 +2117,7 @@ function createPlayer() {
 
     // RIGHT ARM (sword)
     const rightShoulder = new THREE.Group();
-    rightShoulder.position.set(0.95, 1.75, 0.12);
+    rightShoulder.position.set(1.50, 1.75, 0.12);
     model.add(rightShoulder);
 
     const rightUpperArmGeo = new THREE.CylinderGeometry(0.24, 0.28, ARM_UPPER_LEN, 6);
@@ -2145,7 +2145,7 @@ function createPlayer() {
 
     const swordMount = new THREE.Group();
     swordMount.position.set(0.12, -0.08, 0.35);
-    swordMount.rotation.set(1.02, -0.08, 0.52);
+    swordMount.rotation.set(0.70, 1.40, 0.30);
     rightHand.add(swordMount);
 
     function createKatanaBladeGeometry(length, baseWidth, tipWidth, thickness, curve, segments) {
@@ -2456,8 +2456,8 @@ function createPlayer() {
         left: { shoulderX: -0.20, shoulderY: -0.60, shoulderZ: 0.35, elbowX: -1.30 },
         // Right arm carries the sword
         right: { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 },
-        // Sword rests with the tip generally up (no shoulder clipping)
-        swordMount: { x: 0.70, y: -0.08, z: 0.40 },
+        // Sword rests with the tip up and pointing forward
+        swordMount: { x: 0.70, y: 1.40, z: 0.30 },
         // Shield rests vertical and slightly outward
         shieldMount: { x: 0.70, y: -1.05, z: 0.15 }
     };
@@ -3194,10 +3194,10 @@ function createTerracottaWarrior(group) {
     // Shoulder armor
     const shoulderGeo = new THREE.BoxGeometry(0.5, 0.3, 0.5);
     const leftShoulder = new THREE.Mesh(shoulderGeo, darkClay);
-    leftShoulder.position.set(-0.95, 2.3, 0);
+    leftShoulder.position.set(-1.50, 2.3, 0);
     group.add(leftShoulder);
     const rightShoulder = new THREE.Mesh(shoulderGeo, darkClay);
-    rightShoulder.position.set(0.95, 2.3, 0);
+    rightShoulder.position.set(1.50, 2.3, 0);
     group.add(rightShoulder);
 
     // Head
@@ -3593,19 +3593,8 @@ function startGame() {
         }
     }
 
-    // Prepare pointer lock for mouse look (user can click canvas to lock)
-    if (renderer && renderer.domElement) {
-        const canvas = renderer.domElement;
-        canvas.onclick = () => {
-            if (document.pointerLockElement !== canvas && canvas.requestPointerLock) {
-                try {
-                    canvas.requestPointerLock();
-                } catch (err) {
-                    console.warn('Pointer lock request was blocked', err);
-                }
-            }
-        };
-    }
+    // Pointer lock disabled - cursor always visible
+    // Camera follows mouse position without locking
 
     // Setup camera controls
     setupCameraControls();
@@ -3644,7 +3633,7 @@ function pauseGame() {
 
 function resumeGame() {
     isPaused = false;
-    document.body.style.cursor = 'none';
+    document.body.style.cursor = 'default';
 
     // Hide pause menu
     const pauseMenu = document.getElementById('pause-menu');
@@ -3935,7 +3924,7 @@ function startGameFromSave() {
     // Hide menu, show game
     document.getElementById('title-screen').classList.add('hidden');
     document.getElementById('game-screen').classList.remove('hidden');
-    document.body.style.cursor = 'none';
+    document.body.style.cursor = 'default';
 
     // Initialize if needed
     if (!renderer) {
@@ -4428,9 +4417,9 @@ function animatePlayerRig(dt) {
     player.userData.rightHip.rotation.x = damp(player.userData.rightHip.rotation.x, -legSwing, 18, dt);
 
     // Base arm swing (reduced because we have a shield and sword)
-    const baseLeft = (player.userData.pose && player.userData.pose.left) ? player.userData.pose.left : { shoulderX: -0.20, shoulderY: -0.60, shoulderZ: 0.35, elbowX: -1.30 };
+    const baseLeft = (player.userData.pose && player.userData.pose.left) ? player.userData.pose.left : { shoulderX: -0.10, shoulderY: -0.30, shoulderZ: 0.20, elbowX: -1.50 };
     const baseRight = (player.userData.pose && player.userData.pose.right) ? player.userData.pose.right : { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 };
-    const baseSwordMount = (player.userData.pose && player.userData.pose.swordMount) ? player.userData.pose.swordMount : { x: 1.02, y: -0.08, z: 0.52 };
+    const baseSwordMount = (player.userData.pose && player.userData.pose.swordMount) ? player.userData.pose.swordMount : { x: 0.70, y: 1.40, z: 0.30 };
     const baseShieldMount = (player.userData.pose && player.userData.pose.shieldMount) ? player.userData.pose.shieldMount : { x: 0.70, y: -1.05, z: 0.15 };
 
     let leftShoulderX = baseLeft.shoulderX + walkSin * 0.20 * moveAmt;
@@ -4460,10 +4449,10 @@ function animatePlayerRig(dt) {
         leftShoulderZ = 0.60;   // arm slightly raised
         leftElbowX = -0.90;     // elbow bent to hold shield in front
 
-        // Shield facing directly forward, vertical (mirrored)
-        shieldMountX = -1.57;   // flipped upright
-        shieldMountY = 0.0;     // no twist
-        shieldMountZ = 0.0;     // facing forward
+        // Shield rotated so front faces enemies (add PI to Y to flip)
+        shieldMountX = 0.58;
+        shieldMountY = 1.91 + Math.PI;  // flip 180 so front faces forward
+        shieldMountZ = -0.25;
 
         // Sword arm tucks back while blocking
         rightShoulderX = 0.10;
@@ -4490,14 +4479,14 @@ function animatePlayerRig(dt) {
 
         const pose = (swing === 0)
             ? {
-                wind:  { sx: -0.30, sy: -0.10, sz: -1.05, ex: -1.35, mx: -0.85, my:  0.20, mz:  1.10 },
-                strike:{ sx: -0.55, sy:  0.10, sz:  0.95, ex: -0.55, mx: -1.55, my:  0.20, mz: -0.90 },
-                hold:  { sx: -0.35, sy:  0.05, sz:  0.55, ex: -0.95, mx: -1.30, my:  0.18, mz: -0.55 }
+                wind:  { sx: -1.80, sy: 0.20, sz: -0.30, ex: -1.20, mx: 0.70, my: 1.40, mz: 0.30 },
+                strike:{ sx: -0.40, sy: 0.20, sz: -0.30, ex: -0.30, mx: 0.70, my: 1.40, mz: 0.30 },
+                hold:  { sx: -0.60, sy: 0.20, sz: -0.30, ex: -0.50, mx: 0.70, my: 1.40, mz: 0.30 }
             }
             : {
-                wind:  { sx: -0.30, sy:  0.10, sz:  1.05, ex: -1.35, mx: -0.85, my: -0.20, mz: -1.10 },
-                strike:{ sx: -0.55, sy: -0.10, sz: -0.95, ex: -0.55, mx: -1.55, my: -0.20, mz:  0.90 },
-                hold:  { sx: -0.35, sy: -0.05, sz: -0.55, ex: -0.95, mx: -1.30, my: -0.18, mz:  0.55 }
+                wind:  { sx: -1.80, sy: 0.20, sz: 0.30, ex: -1.20, mx: 0.70, my: 1.40, mz: 0.30 },
+                strike:{ sx: -0.40, sy: 0.20, sz: 0.30, ex: -0.30, mx: 0.70, my: 1.40, mz: 0.30 },
+                hold:  { sx: -0.60, sy: 0.20, sz: 0.30, ex: -0.50, mx: 0.70, my: 1.40, mz: 0.30 }
             };
 
         const windEnd = 0.30;
