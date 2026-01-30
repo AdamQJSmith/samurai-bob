@@ -2457,7 +2457,7 @@ function createPlayer() {
         // Right arm carries the sword
         right: { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 },
         // Sword rests with the tip generally up (no shoulder clipping)
-        swordMount: { x: 1.02, y: -0.08, z: 0.52 },
+        swordMount: { x: 0.70, y: -0.08, z: 0.40 },
         // Shield rests vertical and slightly outward
         shieldMount: { x: 0.70, y: -1.05, z: 0.15 }
     };
@@ -4454,25 +4454,25 @@ function animatePlayerRig(dt) {
 
     // Blocking pose overrides walk
     if (playerStats.isBlocking) {
-        // L-shape shield block: forearm up, shield in front of the body
-        leftShoulderX = -0.75;
-        leftShoulderY = 0.65;
-        leftShoulderZ = 1.35;
-        leftElbowX = -1.45;
+        // Roman soldier shield wall: arm extended forward, shield vertical in front
+        leftShoulderX = -1.20;  // arm pushed forward
+        leftShoulderY = 0.15;   // minimal outward rotation
+        leftShoulderZ = 0.60;   // arm slightly raised
+        leftElbowX = -0.90;     // elbow bent to hold shield in front
 
-        // Rotate the strapped shield so its face points forward (no weird inversion)
-        shieldMountX = 0.58;
-        shieldMountY = -1.91;
-        shieldMountZ = 0.25;
+        // Shield facing directly forward, vertical (mirrored)
+        shieldMountX = -1.57;   // flipped upright
+        shieldMountY = 0.0;     // no twist
+        shieldMountZ = 0.0;     // facing forward
 
-        // Sword arm tucks slightly while blocking
-        rightShoulderX = -0.10;
-        rightShoulderY = -0.20;
-        rightShoulderZ = -0.25;
-        rightElbowX = -0.75;
+        // Sword arm tucks back while blocking
+        rightShoulderX = 0.10;
+        rightShoulderY = -0.30;
+        rightShoulderZ = -0.40;
+        rightElbowX = -0.90;
 
-        // Keep sword close to its idle orientation while blocking
-        swordMountX = baseSwordMount.x;
+        // Sword points slightly down and back while blocking
+        swordMountX = 0.60;
         swordMountY = baseSwordMount.y;
         swordMountZ = baseSwordMount.z;
     }
