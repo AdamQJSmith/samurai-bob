@@ -735,6 +735,8 @@ let playerStats = {
     attackAnimTime: 0,
     attackSwingIndex: 0, // 0 = wind up over shield side, 1 = reverse
     attackHoldSwingIndex: 0,
+    // Captured at attack start so chained swings do not snap back to idle pose first
+    attackStartPose: null,
     attackComboTimer: 0,
     isAttacking: false,
     attackCooldown: 0,
@@ -4282,9 +4284,11 @@ function updatePlayer() {
     }
     if (!keys[' ']) playerStats.spacePressed = false;
 
-    // Combo timer counts down while we are not actively attacking
-    if (!playerStats.isAttackingNow && playerStats.attackComboTimer > 0) {
-        playerStats.attackComboTimer = Math.max(0, playerStats.attackComboTimer - deltaTime);
+    // Combo timer counts down while we are not actively attacking.
+    // After it reaches 0 we keep counting down into the negative for a short fade,
+    // so the sword can smoothly return to its neutral pose if you do NOT chain another swing.
+    if (!playerStats.isAttackingNow && playerStats.attackComboTimer > -ATTACK_HOLD_FADE) {
+        playerStats.attackComboTimer = Math.max(-ATTACK_HOLD_FADE, playerStats.attackComboTimer - deltaTime);
     }
 
     // Track attack animation time (shared by both key and mouse attacks)
@@ -4296,8 +4300,9 @@ function updatePlayer() {
             playerStats.attackAnimTime = 0;
 
             // Keep a short combo window for alternating the next swing direction.
-            // (We do NOT hold a post-slash pose here; the sword returns to idle immediately.)
+            // We DO hold a post-slash pose during this window.
             playerStats.attackComboTimer = ATTACK_COMBO_WINDOW;
+            playerStats.attackHoldSwingIndex = playerStats.attackSwingIndex;
         }
     }
 
@@ -4467,27 +4472,78 @@ function animatePlayerRig(dt) {
     }
 
 
+    // Slash animation presets.
+    // Keep sword mount at base values so sword always points outward naturally.
+    // Only move the arm to create the slash.
+    const getSwordSlashPose = (swing) => {
+        const mx = baseSwordMount.x;
+        const my = baseSwordMount.y;
+        const mz = baseSwordMount.z;
+
+        if (swing === 0) {
+            // Right to left slash - arm swings across body
+            return {
+                wind:   { sx: -0.50, sy: 0.60, sz: -0.40, ex: -0.60, mx, my, mz },
+                strike: { sx: -0.50, sy: -0.90, sz: -0.40, ex: -0.50, mx, my, mz },
+                hold:   { sx: -0.40, sy: -0.60, sz: -0.40, ex: -0.60, mx, my, mz }
+            };
+        }
+
+        // Left to right slash
+        return {
+            wind:   { sx: -0.50, sy: -0.90, sz: -0.40, ex: -0.60, mx, my, mz },
+            strike: { sx: -0.50, sy: 0.60, sz: -0.40, ex: -0.50, mx, my, mz },
+            hold:   { sx: -0.40, sy: 0.40, sz: -0.40, ex: -0.60, mx, my, mz }
+        };
+    };
+
+    // Hold the end pose for a moment so chaining attacks looks like a real combo.
+    // When the combo window expires, we fade back to the neutral pose.
+    let holdWeight = 0;
+    if (!playerStats.isAttackingNow && !playerStats.isBlocking) {
+        const tCombo = playerStats.attackComboTimer || 0;
+        if (tCombo > 0) {
+            holdWeight = 1;
+        } else if (tCombo < 0 && tCombo > -ATTACK_HOLD_FADE) {
+            // tCombo runs from 0 to -ATTACK_HOLD_FADE
+            holdWeight = 1 + (tCombo / ATTACK_HOLD_FADE);
+        }
+    }
+
+    if (holdWeight > 0) {
+        const holdSwing = ((playerStats.attackHoldSwingIndex || 0) % 2 + 2) % 2;
+        const holdPose = getSwordSlashPose(holdSwing).hold;
+
+        rightShoulderX = THREE.MathUtils.lerp(rightShoulderX, holdPose.sx, holdWeight);
+        rightShoulderY = THREE.MathUtils.lerp(rightShoulderY, holdPose.sy, holdWeight);
+        rightShoulderZ = THREE.MathUtils.lerp(rightShoulderZ, holdPose.sz, holdWeight);
+        rightElbowX = THREE.MathUtils.lerp(rightElbowX, holdPose.ex, holdWeight);
+
+        swordMountX = THREE.MathUtils.lerp(swordMountX, holdPose.mx, holdWeight);
+        swordMountY = THREE.MathUtils.lerp(swordMountY, holdPose.my, holdWeight);
+        swordMountZ = THREE.MathUtils.lerp(swordMountZ, holdPose.mz, holdWeight);
+    }
+
     // Attack pose overrides blocking
     if (playerStats.isAttackingNow) {
         const attackDuration = ATTACK_ANIM_DURATION;
         const p = THREE.MathUtils.clamp((playerStats.attackAnimTime || 0) / attackDuration, 0, 1);
 
-        // Two-step diagonal combo:
-        //   0: wind up over shield side -> slash down across to sword side
-        //   1: reverse
+        // Two-step combo:
+        //   0: left -> right
+        //   1: right -> left
         const swing = ((playerStats.attackSwingIndex || 0) % 2 + 2) % 2;
+        const pose = getSwordSlashPose(swing);
 
-        const pose = (swing === 0)
-            ? {
-                wind:  { sx: -1.80, sy: 0.20, sz: -0.30, ex: -1.20, mx: 0.70, my: 1.40, mz: 0.30 },
-                strike:{ sx: -0.40, sy: 0.20, sz: -0.30, ex: -0.30, mx: 0.70, my: 1.40, mz: 0.30 },
-                hold:  { sx: -0.60, sy: 0.20, sz: -0.30, ex: -0.50, mx: 0.70, my: 1.40, mz: 0.30 }
-            }
-            : {
-                wind:  { sx: -1.80, sy: 0.20, sz: 0.30, ex: -1.20, mx: 0.70, my: 1.40, mz: 0.30 },
-                strike:{ sx: -0.40, sy: 0.20, sz: 0.30, ex: -0.30, mx: 0.70, my: 1.40, mz: 0.30 },
-                hold:  { sx: -0.60, sy: 0.20, sz: 0.30, ex: -0.50, mx: 0.70, my: 1.40, mz: 0.30 }
-            };
+        const start = playerStats.attackStartPose;
+        const startRSX = (start && typeof start.rsx === 'number') ? start.rsx : baseRight.shoulderX;
+        const startRSY = (start && typeof start.rsy === 'number') ? start.rsy : baseRight.shoulderY;
+        const startRSZ = (start && typeof start.rsz === 'number') ? start.rsz : baseRight.shoulderZ;
+        const startREX = (start && typeof start.rex === 'number') ? start.rex : baseRight.elbowX;
+
+        const startSMX = (start && typeof start.smx === 'number') ? start.smx : baseSwordMount.x;
+        const startSMY = (start && typeof start.smy === 'number') ? start.smy : baseSwordMount.y;
+        const startSMZ = (start && typeof start.smz === 'number') ? start.smz : baseSwordMount.z;
 
         const windEnd = 0.30;
         const strikeEnd = 0.68;
@@ -4495,14 +4551,14 @@ function animatePlayerRig(dt) {
         if (p < windEnd) {
             const w = easeInOutCubic(p / windEnd);
 
-            rightShoulderX = THREE.MathUtils.lerp(baseRight.shoulderX, pose.wind.sx, w);
-            rightShoulderY = THREE.MathUtils.lerp(baseRight.shoulderY, pose.wind.sy, w);
-            rightShoulderZ = THREE.MathUtils.lerp(baseRight.shoulderZ, pose.wind.sz, w);
-            rightElbowX = THREE.MathUtils.lerp(baseRight.elbowX, pose.wind.ex, w);
+            rightShoulderX = THREE.MathUtils.lerp(startRSX, pose.wind.sx, w);
+            rightShoulderY = THREE.MathUtils.lerp(startRSY, pose.wind.sy, w);
+            rightShoulderZ = THREE.MathUtils.lerp(startRSZ, pose.wind.sz, w);
+            rightElbowX = THREE.MathUtils.lerp(startREX, pose.wind.ex, w);
 
-            swordMountX = THREE.MathUtils.lerp(baseSwordMount.x, pose.wind.mx, w);
-            swordMountY = THREE.MathUtils.lerp(baseSwordMount.y, pose.wind.my, w);
-            swordMountZ = THREE.MathUtils.lerp(baseSwordMount.z, pose.wind.mz, w);
+            swordMountX = THREE.MathUtils.lerp(startSMX, pose.wind.mx, w);
+            swordMountY = THREE.MathUtils.lerp(startSMY, pose.wind.my, w);
+            swordMountZ = THREE.MathUtils.lerp(startSMZ, pose.wind.mz, w);
 
         } else if (p < strikeEnd) {
             const s = easeInOutCubic((p - windEnd) / (strikeEnd - windEnd));
@@ -4519,16 +4575,16 @@ function animatePlayerRig(dt) {
         } else {
             const r = easeInOutCubic((p - strikeEnd) / (1 - strikeEnd));
 
-            // If the player does not chain another slash, we return to idle immediately.
-            // (Combo direction still alternates via attackComboTimer, but we do not hold a post-slash pose.)
-            rightShoulderX = THREE.MathUtils.lerp(pose.strike.sx, baseRight.shoulderX, r);
-            rightShoulderY = THREE.MathUtils.lerp(pose.strike.sy, baseRight.shoulderY, r);
-            rightShoulderZ = THREE.MathUtils.lerp(pose.strike.sz, baseRight.shoulderZ, r);
-            rightElbowX = THREE.MathUtils.lerp(pose.strike.ex, baseRight.elbowX, r);
+            // End on a post-slash hold pose. We keep this pose during the combo window,
+            // then fade back to idle if the player does not chain another swing.
+            rightShoulderX = THREE.MathUtils.lerp(pose.strike.sx, pose.hold.sx, r);
+            rightShoulderY = THREE.MathUtils.lerp(pose.strike.sy, pose.hold.sy, r);
+            rightShoulderZ = THREE.MathUtils.lerp(pose.strike.sz, pose.hold.sz, r);
+            rightElbowX = THREE.MathUtils.lerp(pose.strike.ex, pose.hold.ex, r);
 
-            swordMountX = THREE.MathUtils.lerp(pose.strike.mx, baseSwordMount.x, r);
-            swordMountY = THREE.MathUtils.lerp(pose.strike.my, baseSwordMount.y, r);
-            swordMountZ = THREE.MathUtils.lerp(pose.strike.mz, baseSwordMount.z, r);
+            swordMountX = THREE.MathUtils.lerp(pose.strike.mx, pose.hold.mx, r);
+            swordMountY = THREE.MathUtils.lerp(pose.strike.my, pose.hold.my, r);
+            swordMountZ = THREE.MathUtils.lerp(pose.strike.mz, pose.hold.mz, r);
         }
 
         // During attack the shield arm stays in its idle carry pose
@@ -4540,7 +4596,7 @@ function animatePlayerRig(dt) {
 
 
     // Optional polish: subtle sword wobble while moving (keeps the tip generally up)
-    if (!playerStats.isAttackingNow && !playerStats.isBlocking && moveAmt > 0.01) {
+    if (!playerStats.isAttackingNow && !playerStats.isBlocking && holdWeight <= 0 && moveAmt > 0.01) {
         const wob = moveAmt;
         swordMountX += (walkSin * 0.015 + walkSin2 * 0.010) * wob;
         swordMountY += (walkCos * 0.010) * wob;
@@ -6039,6 +6095,27 @@ function playerAttack() {
 
     playerStats.attackCooldown = ATTACK_COOLDOWN;
 
+    // Capture the current rig pose so the attack can start smoothly from wherever the arm is
+    // (idle, walking sway, or the held end pose of the previous slash).
+    if (
+        player.userData &&
+        player.userData.rightShoulder &&
+        player.userData.rightElbow &&
+        player.userData.swordMount
+    ) {
+        playerStats.attackStartPose = {
+            rsx: player.userData.rightShoulder.rotation.x,
+            rsy: player.userData.rightShoulder.rotation.y,
+            rsz: player.userData.rightShoulder.rotation.z,
+            rex: player.userData.rightElbow.rotation.x,
+            smx: player.userData.swordMount.rotation.x,
+            smy: player.userData.swordMount.rotation.y,
+            smz: player.userData.swordMount.rotation.z
+        };
+    } else {
+        playerStats.attackStartPose = null;
+    }
+
     // Drive the visible animation from a single state
     playerStats.isAttackingNow = true;
     playerStats.attackAnimTime = 0;
@@ -6103,63 +6180,91 @@ function playerAttack() {
 
 
 function createSwordSlash(swingIndex = 0) {
-    // Create a visible arc slash effect
+    // Create a sweeping slash effect in front of Bob
     const slashGroup = new THREE.Group();
 
-    // Arc geometry for the slash
-    const curve = new THREE.EllipseCurve(0, 0, 3, 3, 0, Math.PI * 0.7, false, 0);
-    const points = curve.getPoints(20);
-    const slashGeo = new THREE.BufferGeometry().setFromPoints(
-        points.map(p => new THREE.Vector3(p.x, 0, p.y))
-    );
+    const swing = (swingIndex || 0) % 2;
+    // swing 0: sweeps from Bob's right to his left
+    // swing 1: sweeps from Bob's left to his right
+    const sweepDir = (swing === 0) ? 1 : -1;
 
-    // Create multiple lines for thickness
-    for (let i = 0; i < 3; i++) {
-        const mat = new THREE.LineBasicMaterial({
-            color: 0xffffff,
+    // Create the slash arc
+    const arcRadius = 3.5;
+    const arcSpan = Math.PI * 0.6; // 108 degree arc
+
+    // Create multiple trail layers for the swoosh effect
+    for (let layer = 0; layer < 5; layer++) {
+        const trailShape = new THREE.Shape();
+        const innerR = arcRadius - 0.3 - layer * 0.2;
+        const outerR = arcRadius + 0.1 - layer * 0.1;
+
+        // Draw arc centered at 0 (will be rotated to face forward)
+        const halfArc = arcSpan / 2;
+        trailShape.absarc(0, 0, outerR, -halfArc, halfArc, false);
+        trailShape.absarc(0, 0, innerR, halfArc, -halfArc, true);
+        trailShape.closePath();
+
+        const trailGeo = new THREE.ShapeGeometry(trailShape);
+        const trailMat = new THREE.MeshBasicMaterial({
+            color: layer === 0 ? 0xffffff : 0x88ccff,
             transparent: true,
-            opacity: 1 - i * 0.3,
-            linewidth: 3
+            opacity: (1 - layer * 0.18),
+            side: THREE.DoubleSide
         });
-        const line = new THREE.Line(slashGeo, mat);
-        line.scale.setScalar(1 + i * 0.15);
-        slashGroup.add(line);
+        const trailMesh = new THREE.Mesh(trailGeo, trailMat);
+        trailMesh.rotation.x = -Math.PI / 2;
+        trailMesh.userData.layer = layer;
+        slashGroup.add(trailMesh);
     }
 
-    // Add a filled arc mesh for more visibility
-    const arcShape = new THREE.Shape();
-    arcShape.absarc(0, 0, 3.5, 0, Math.PI * 0.7, false);
-    arcShape.lineTo(0, 0);
-    const arcGeo = new THREE.ShapeGeometry(arcShape);
-    const arcMat = new THREE.MeshBasicMaterial({
-        color: 0x88ccff,
-        transparent: true,
-        opacity: 0.5,
-        side: THREE.DoubleSide
-    });
-    const arcMesh = new THREE.Mesh(arcGeo, arcMat);
-    arcMesh.rotation.x = -Math.PI / 2;
-    slashGroup.add(arcMesh);
-
-    // Position at player
+    // Position in front of player
     slashGroup.position.copy(player.position);
     slashGroup.position.y += 2;
-    const swing = (swingIndex || 0) % 2;
-    const dir = (swing === 0) ? -1 : 1;
-    slashGroup.rotation.y = player.rotation.y + dir * Math.PI * 0.35;
+    slashGroup.position.x += Math.sin(player.rotation.y) * 2.5;
+    slashGroup.position.z += Math.cos(player.rotation.y) * 2.5;
+
+    // Arc sweeps across in front of Bob
+    // Start on one side, end on the other side, always in front
+    const centerAngle = player.rotation.y - Math.PI / 2; // in front of Bob
+    const sweepRange = Math.PI * 0.5; // sweep 90 degrees total
+    const startAngle = centerAngle + sweepDir * sweepRange / 2;
+    const endAngle = centerAngle - sweepDir * sweepRange / 2;
+    slashGroup.rotation.y = startAngle;
 
     scene.add(slashGroup);
 
-    // Animate and remove
-    let life = 0;
+    // Animate the sweep
+    let progress = 0;
+    const duration = 0.12; // seconds
+    let lastTime = performance.now();
+
     const animateSlash = () => {
-        life += 0.05;
-        slashGroup.scale.setScalar(1 + life * 0.5);
+        const now = performance.now();
+        const dt = (now - lastTime) / 1000;
+        lastTime = now;
+
+        progress += dt / duration;
+        const t = Math.min(progress, 1);
+
+        // Ease out for snappy feel
+        const eased = 1 - Math.pow(1 - t, 3);
+
+        // Sweep rotation
+        slashGroup.rotation.y = THREE.MathUtils.lerp(startAngle, endAngle, eased);
+
+        // Fade out trails progressively
         slashGroup.children.forEach(child => {
-            if (child.material) child.material.opacity *= 0.85;
+            if (child.material) {
+                const layer = child.userData.layer || 0;
+                const fadeStart = 0.3 + layer * 0.1;
+                if (t > fadeStart) {
+                    const fadeProg = (t - fadeStart) / (1 - fadeStart);
+                    child.material.opacity = (1 - layer * 0.18) * (1 - fadeProg);
+                }
+            }
         });
 
-        if (life < 0.3) {
+        if (progress < 1.2) {
             requestAnimationFrame(animateSlash);
         } else {
             scene.remove(slashGroup);
