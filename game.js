@@ -74,6 +74,12 @@ function dampAngle(current, target, lambda, dt) {
     return current + deltaAngle(current, target) * (1 - Math.exp(-lambda * dt));
 }
 
+function dampQuaternion(quat, targetQuat, lambda, dt) {
+    const t = 1 - Math.exp(-lambda * dt);
+    quat.slerp(targetQuat, t);
+}
+
+
 function easeInOutCubic(x) {
     return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 }
@@ -724,6 +730,7 @@ let playerStats = {
     spacePressed: false,
     isAttackingNow: false,
     attackAnimTime: 0,
+    attackSwingIndex: -1,
     isAttacking: false,
     attackCooldown: 0,
     isBlocking: false,
@@ -1698,7 +1705,7 @@ function addBackgroundElements() {
     backgroundGroup.add(shore);
 
     // =========================================================
-    // Distant mountains
+    // Distant mountains - positioned in arc behind arena (negative Z only)
     // =========================================================
     const mountainColors = [0x3D8F3D, 0x2F7A2F, 0x3A6DA3, 0x2F5E8F];
     for (let i = 0; i < 10; i++) {
@@ -1715,13 +1722,14 @@ function addBackgroundElements() {
 
         const mountain = new THREE.Mesh(mountainGeo, mountainMat);
 
-        const angle = (i / 10) * Math.PI * 2 + 0.4;
-        const distance = 170 + Math.random() * 70;
+        // Spread mountains in a semicircle behind the arena (Z always negative)
+        const angle = Math.PI + (i / 10) * Math.PI; // π to 2π = behind arena
+        const distance = 120 + Math.random() * 60;
 
         mountain.position.set(
             Math.cos(angle) * distance,
             -15 + height * 0.35,
-            Math.sin(angle) * distance - 190 // bias negative Z so it sits behind the arena
+            Math.sin(angle) * distance - 50 // all end up with negative Z (behind arena)
         );
 
         mountain.rotation.y = Math.random() * Math.PI;
@@ -2066,8 +2074,9 @@ function createPlayer() {
     leftHand.add(leftHandMesh);
 
     const shieldMount = new THREE.Group();
-    shieldMount.position.set(-0.08, -0.05, 0.55);
-    shieldMount.rotation.set(0.05, -0.25, 0.0);
+    // Rest pose: shield sits on the left forearm, angled slightly outward
+    shieldMount.position.set(-0.45, 0.02, 0.18);
+    shieldMount.rotation.set(0.15, -1.15, 0.10);
     leftHand.add(shieldMount);
 
     // SHIELD
@@ -2125,8 +2134,9 @@ function createPlayer() {
     rightHand.add(rightHandMesh);
 
     const swordMount = new THREE.Group();
-    swordMount.position.set(0.12, -0.08, 0.35);
-    swordMount.rotation.set(-0.10, 0.15, 0.35);
+    // Rest pose: sword is held like a sword (blade angled forward), not like a spear
+    swordMount.position.set(0.18, -0.07, 0.16);
+    swordMount.rotation.set(1.25, 0.10, 0.20);
     rightHand.add(swordMount);
 
     function createKatanaBladeGeometry(length, baseWidth, tipWidth, thickness, curve, segments) {
@@ -2433,10 +2443,17 @@ function createPlayer() {
 
     // Default pose values (used by animation update)
     playerGroup.userData.pose = {
-        left: { shoulderX: -0.35, shoulderY: 0.15, shoulderZ: 0.55, elbowX: -1.05 },
-        right: { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 },
-        swordMount: { x: -0.10, y: 0.15, z: 0.35 },
-        shieldMount: { x: 0.05, y: -0.25, z: 0.0 }
+        // Default (non-leaf/dragon/wind) stance tuned for sword + shield readability
+        left:  { shoulderX: 0.12, shoulderY: 0.05, shoulderZ: 0.40, elbowX: -0.95 },
+        right: { shoulderX: -0.10, shoulderY: -0.25, shoulderZ: -0.35, elbowX: -1.00 },
+
+        // Weapon mount rotations (relative to hand)
+        swordMount:  { x: 1.25, y: 0.10, z: 0.20 },
+        shieldMount: { x: 0.15, y: -1.15, z: 0.10 },
+
+        // Weapon mount positions (relative to hand)
+        swordMountPos:  { x: 0.18, y: -0.07, z: 0.16 },
+        shieldMountPos: { x: -0.45, y: 0.02, z: 0.18 }
     };
 
     
@@ -2446,6 +2463,22 @@ function createPlayer() {
 
     rightShoulder.rotation.set(playerGroup.userData.pose.right.shoulderX, playerGroup.userData.pose.right.shoulderY, playerGroup.userData.pose.right.shoulderZ);
     rightElbow.rotation.x = playerGroup.userData.pose.right.elbowX;
+
+    // Apply mount positions first (so the first frame reads correctly)
+    if (playerGroup.userData.pose.swordMountPos) {
+        swordMount.position.set(
+            playerGroup.userData.pose.swordMountPos.x,
+            playerGroup.userData.pose.swordMountPos.y,
+            playerGroup.userData.pose.swordMountPos.z
+        );
+    }
+    if (playerGroup.userData.pose.shieldMountPos) {
+        shieldMount.position.set(
+            playerGroup.userData.pose.shieldMountPos.x,
+            playerGroup.userData.pose.shieldMountPos.y,
+            playerGroup.userData.pose.shieldMountPos.z
+        );
+    }
 
     swordMount.rotation.set(playerGroup.userData.pose.swordMount.x, playerGroup.userData.pose.swordMount.y, playerGroup.userData.pose.swordMount.z);
     shieldMount.rotation.set(playerGroup.userData.pose.shieldMount.x, playerGroup.userData.pose.shieldMount.y, playerGroup.userData.pose.shieldMount.z);
@@ -4273,7 +4306,7 @@ function updatePlayer() {
     // Track attack animation time (shared by both key and mouse attacks)
     if (playerStats.isAttackingNow) {
         playerStats.attackAnimTime = (playerStats.attackAnimTime || 0) + deltaTime;
-        const attackDuration = 0.42;
+        const attackDuration = 0.50;
         if (playerStats.attackAnimTime >= attackDuration) {
             playerStats.isAttackingNow = false;
             playerStats.attackAnimTime = 0;
@@ -4355,16 +4388,30 @@ function updateCamera() {
 function animatePlayerRig(dt) {
     if (!player || !player.userData) return;
 
+    const ud = player.userData;
+
     const rigOk =
-        player.userData.model &&
-        player.userData.leftShoulder && player.userData.leftElbow &&
-        player.userData.rightShoulder && player.userData.rightElbow &&
-        player.userData.leftHip && player.userData.rightHip &&
-        player.userData.swordMount && player.userData.shieldMount;
+        ud.model &&
+        ud.leftShoulder && ud.leftElbow &&
+        ud.rightShoulder && ud.rightElbow &&
+        ud.leftHip && ud.rightHip &&
+        ud.swordMount && ud.shieldMount;
 
     if (!rigOk) return;
 
-    const model = player.userData.model;
+    // Scratch objects to avoid per-frame allocations
+    if (!animatePlayerRig._scratch) {
+        animatePlayerRig._scratch = {
+            e1: new THREE.Euler(0, 0, 0, 'XYZ'),
+            e2: new THREE.Euler(0, 0, 0, 'XYZ'),
+            q1: new THREE.Quaternion(),
+            q2: new THREE.Quaternion(),
+            q3: new THREE.Quaternion()
+        };
+    }
+    const S = animatePlayerRig._scratch;
+
+    const model = ud.model;
 
     const vx = playerStats.velocity.x || 0;
     const vz = playerStats.velocity.z || 0;
@@ -4373,7 +4420,7 @@ function animatePlayerRig(dt) {
     const moveAmt = THREE.MathUtils.clamp(speed / maxSpeed, 0, 1);
 
     // Advance animation time with speed
-    playerStats.animTime = (playerStats.animTime || 0) + dt * (2.2 + moveAmt * 8.5);
+    playerStats.animTime = (playerStats.animTime || 0) + dt * (2.0 + moveAmt * 8.0);
     const t = playerStats.animTime;
 
     const walkSin = Math.sin(t);
@@ -4381,10 +4428,10 @@ function animatePlayerRig(dt) {
     const walkCos = Math.cos(t);
 
     // Body bob and sway
-    const bobTarget = (walkSin * 0.10 + walkSin2 * 0.03) * moveAmt;
+    const bobTarget = (walkSin * 0.09 + walkSin2 * 0.03) * moveAmt;
     model.position.y = damp(model.position.y, bobTarget, 14, dt);
 
-    const swayZ = walkCos * 0.08 * moveAmt;
+    const swayZ = walkCos * 0.07 * moveAmt;
     model.rotation.z = damp(model.rotation.z, swayZ, 14, dt);
 
     const leanX = -walkCos * 0.04 * moveAmt;
@@ -4392,24 +4439,44 @@ function animatePlayerRig(dt) {
 
     // Legs
     const legSwing = walkSin * 0.95 * moveAmt;
-    player.userData.leftHip.rotation.x = damp(player.userData.leftHip.rotation.x, legSwing, 18, dt);
-    player.userData.rightHip.rotation.x = damp(player.userData.rightHip.rotation.x, -legSwing, 18, dt);
+    ud.leftHip.rotation.x = damp(ud.leftHip.rotation.x, legSwing, 18, dt);
+    ud.rightHip.rotation.x = damp(ud.rightHip.rotation.x, -legSwing, 18, dt);
 
-    // Base arm swing (reduced because we have a shield and sword)
-    const baseLeft = (player.userData.pose && player.userData.pose.left) ? player.userData.pose.left : { shoulderX: -0.35, shoulderY: 0.15, shoulderZ: 0.55, elbowX: -1.05 };
-    const baseRight = (player.userData.pose && player.userData.pose.right) ? player.userData.pose.right : { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 };
-    const baseSwordMount = (player.userData.pose && player.userData.pose.swordMount) ? player.userData.pose.swordMount : { x: -0.10, y: 0.15, z: 0.35 };
-    const baseShieldMount = (player.userData.pose && player.userData.pose.shieldMount) ? player.userData.pose.shieldMount : { x: 0.05, y: -0.25, z: 0.0 };
+    // Base pose (falls back to tuned defaults if pose is missing)
+    const baseLeft = (ud.pose && ud.pose.left)
+        ? ud.pose.left
+        : { shoulderX: 0.12, shoulderY: 0.05, shoulderZ: 0.40, elbowX: -0.95 };
 
-    let leftShoulderX = baseLeft.shoulderX + walkSin * 0.20 * moveAmt;
-    let leftShoulderY = baseLeft.shoulderY;
-    let leftShoulderZ = baseLeft.shoulderZ;
-    let leftElbowX = baseLeft.elbowX;
+    const baseRight = (ud.pose && ud.pose.right)
+        ? ud.pose.right
+        : { shoulderX: -0.10, shoulderY: -0.25, shoulderZ: -0.35, elbowX: -1.00 };
 
-    let rightShoulderX = baseRight.shoulderX - walkSin * 0.45 * moveAmt;
-    let rightShoulderY = baseRight.shoulderY;
-    let rightShoulderZ = baseRight.shoulderZ;
-    let rightElbowX = baseRight.elbowX;
+    const baseSwordMount = (ud.pose && ud.pose.swordMount)
+        ? ud.pose.swordMount
+        : { x: 1.25, y: 0.10, z: 0.20 };
+
+    const baseShieldMount = (ud.pose && ud.pose.shieldMount)
+        ? ud.pose.shieldMount
+        : { x: 0.15, y: -1.15, z: 0.10 };
+
+    const baseSwordMountPos = (ud.pose && ud.pose.swordMountPos)
+        ? ud.pose.swordMountPos
+        : { x: 0.18, y: -0.07, z: 0.16 };
+
+    const baseShieldMountPos = (ud.pose && ud.pose.shieldMountPos)
+        ? ud.pose.shieldMountPos
+        : { x: -0.45, y: 0.02, z: 0.18 };
+
+    // Base arm motion (small, because he is carrying a sword + shield)
+    let leftShoulderX = baseLeft.shoulderX + walkSin * 0.08 * moveAmt;
+    let leftShoulderY = baseLeft.shoulderY + walkCos * 0.02 * moveAmt;
+    let leftShoulderZ = baseLeft.shoulderZ + walkCos * 0.04 * moveAmt;
+    let leftElbowX = baseLeft.elbowX + walkSin * 0.05 * moveAmt;
+
+    let rightShoulderX = baseRight.shoulderX - walkSin * 0.14 * moveAmt;
+    let rightShoulderY = baseRight.shoulderY - walkCos * 0.02 * moveAmt;
+    let rightShoulderZ = baseRight.shoulderZ - walkCos * 0.05 * moveAmt;
+    let rightElbowX = baseRight.elbowX - walkSin * 0.06 * moveAmt;
 
     // Default mounts
     let shieldMountX = baseShieldMount.x;
@@ -4420,80 +4487,143 @@ function animatePlayerRig(dt) {
     let swordMountY = baseSwordMount.y;
     let swordMountZ = baseSwordMount.z;
 
+    // Default mount positions
+    let shieldPosX = baseShieldMountPos.x;
+    let shieldPosY = baseShieldMountPos.y;
+    let shieldPosZ = baseShieldMountPos.z;
+
+    let swordPosX = baseSwordMountPos.x;
+    let swordPosY = baseSwordMountPos.y;
+    let swordPosZ = baseSwordMountPos.z;
+
+    // Subtle carry bounce (weapons should not flail)
+    const carryBob = (walkSin * 0.020 + walkSin2 * 0.010) * moveAmt;
+    const carrySway = walkCos * 0.015 * moveAmt;
+
+    swordMountZ += carrySway * 0.8;
+    swordMountX += carryBob * 0.6;
+
+    shieldMountZ += -carrySway * 0.7;
+    shieldMountX += carryBob * 0.4;
+
+    swordPosY += carryBob * 0.6;
+    shieldPosY += carryBob * 0.8;
+
     // Blocking pose overrides walk
     if (playerStats.isBlocking) {
-        // Bring shield across the chest, tuck sword arm slightly
+        // Raise shield to a forward, chest-height block
         leftShoulderX = -0.85;
-        leftShoulderY = 0.25;
-        leftShoulderZ = 0.95;
-        leftElbowX = -0.55;
+        leftShoulderY = 0.18;
+        leftShoulderZ = 0.75;
+        leftElbowX = -0.50;
 
-        shieldMountY = 0.05;
-        shieldMountX = 0.00;
-        shieldMountZ = 0.0;
-
+        // Tuck sword arm slightly
         rightShoulderX = -0.05;
-        rightShoulderY = -0.25;
-        rightShoulderZ = -0.25;
-        rightElbowX = -0.65;
+        rightShoulderY = -0.35;
+        rightShoulderZ = -0.30;
+        rightElbowX = -1.10;
 
-        swordMountZ = 0.25;
+        // Small positional shift to center the shield
+        shieldPosX = baseShieldMountPos.x + 0.10;
+        shieldPosY = baseShieldMountPos.y + 0.06;
+        shieldPosZ = baseShieldMountPos.z + 0.18;
+
+        swordPosZ = baseSwordMountPos.z - 0.04;
     }
 
     // Attack pose overrides blocking
     if (playerStats.isAttackingNow) {
-        const attackDuration = 0.42;
+        const attackDuration = 0.50;
         const p = THREE.MathUtils.clamp((playerStats.attackAnimTime || 0) / attackDuration, 0, 1);
 
-        // 3-phase attack: wind-up -> slash -> recover
-        let shoulderY = 0;
-        let shoulderX = 0;
-        let shoulderZ = 0;
-        let elbowX = 0;
-        let swordZ = 0;
+        const variant = (typeof playerStats.attackSwingIndex === 'number') ? playerStats.attackSwingIndex : 0;
 
-        if (p < 0.28) {
-            const w = easeInOutCubic(p / 0.28);
-            shoulderY = THREE.MathUtils.lerp(-0.15, -1.05, w);
-            shoulderX = THREE.MathUtils.lerp(-0.15, -0.65, w);
-            shoulderZ = THREE.MathUtils.lerp(-0.40, -0.75, w);
-            elbowX = THREE.MathUtils.lerp(-0.75, -1.15, w);
-            swordZ = THREE.MathUtils.lerp(0.35, 0.65, w);
-        } else if (p < 0.62) {
-            const s = easeInOutCubic((p - 0.28) / (0.62 - 0.28));
-            shoulderY = THREE.MathUtils.lerp(-1.05, 1.35, s);
-            shoulderX = THREE.MathUtils.lerp(-0.65, -1.15, s);
-            shoulderZ = THREE.MathUtils.lerp(-0.75, 0.25, s);
-            elbowX = THREE.MathUtils.lerp(-1.15, -0.20, s);
-            swordZ = THREE.MathUtils.lerp(0.65, -1.20, s);
+        // 3-phase attack: wind-up -> strike -> recover
+        const windEnd = 0.22;
+        const strikeEnd = 0.62;
+
+        let wind = null;
+        let strike = null;
+
+        if (variant === 0) {
+            // Right-to-left diagonal slash
+            wind = {
+                sx: -0.30, sy: -0.85, sz: -0.55, ex: -1.25,
+                mx: baseSwordMount.x, my: baseSwordMount.y, mz: baseSwordMount.z + 0.35
+            };
+            strike = {
+                sx: -0.95, sy: 0.40, sz: 0.18, ex: -0.30,
+                mx: baseSwordMount.x + 0.12, my: baseSwordMount.y, mz: baseSwordMount.z - 0.85
+            };
+        } else if (variant === 1) {
+            // Left-to-right diagonal slash (across the front)
+            wind = {
+                sx: -0.55, sy: 0.55, sz: 0.10, ex: -1.10,
+                mx: baseSwordMount.x, my: baseSwordMount.y, mz: baseSwordMount.z - 0.65
+            };
+            strike = {
+                sx: -0.85, sy: -0.45, sz: -0.35, ex: -0.25,
+                mx: baseSwordMount.x + 0.08, my: baseSwordMount.y, mz: baseSwordMount.z + 0.75
+            };
         } else {
-            const r = easeInOutCubic((p - 0.62) / (1 - 0.62));
-            shoulderY = THREE.MathUtils.lerp(1.35, baseRight.shoulderY, r);
-            shoulderX = THREE.MathUtils.lerp(-1.15, baseRight.shoulderX, r);
-            shoulderZ = THREE.MathUtils.lerp(0.25, baseRight.shoulderZ, r);
-            elbowX = THREE.MathUtils.lerp(-0.20, baseRight.elbowX, r);
-            swordZ = THREE.MathUtils.lerp(-1.20, baseSwordMount.z, r);
+            // Slightly more vertical slash (downward in front)
+            wind = {
+                sx: -1.10, sy: -0.15, sz: -0.25, ex: -0.95,
+                mx: baseSwordMount.x - 0.10, my: baseSwordMount.y, mz: baseSwordMount.z + 0.10
+            };
+            strike = {
+                sx: -0.70, sy: 0.20, sz: -0.10, ex: -0.25,
+                mx: baseSwordMount.x + 0.18, my: baseSwordMount.y, mz: baseSwordMount.z - 0.25
+            };
         }
 
-        rightShoulderY = shoulderY;
-        rightShoulderX = shoulderX;
-        rightShoulderZ = shoulderZ;
-        rightElbowX = elbowX;
+        if (p < windEnd) {
+            const w = easeInOutCubic(p / windEnd);
 
-        // During attack the shield arm should stay out of the way but still look held
-        leftShoulderX = -0.25;
-        leftShoulderY = 0.10;
-        leftShoulderZ = 0.55;
-        leftElbowX = -1.05;
+            rightShoulderX = THREE.MathUtils.lerp(baseRight.shoulderX, wind.sx, w);
+            rightShoulderY = THREE.MathUtils.lerp(baseRight.shoulderY, wind.sy, w);
+            rightShoulderZ = THREE.MathUtils.lerp(baseRight.shoulderZ, wind.sz, w);
+            rightElbowX = THREE.MathUtils.lerp(baseRight.elbowX, wind.ex, w);
 
-        swordMountZ = swordZ;
+            swordMountX = THREE.MathUtils.lerp(baseSwordMount.x, wind.mx, w);
+            swordMountY = THREE.MathUtils.lerp(baseSwordMount.y, wind.my, w);
+            swordMountZ = THREE.MathUtils.lerp(baseSwordMount.z, wind.mz, w);
+        } else if (p < strikeEnd) {
+            const s = easeInOutCubic((p - windEnd) / (strikeEnd - windEnd));
+
+            rightShoulderX = THREE.MathUtils.lerp(wind.sx, strike.sx, s);
+            rightShoulderY = THREE.MathUtils.lerp(wind.sy, strike.sy, s);
+            rightShoulderZ = THREE.MathUtils.lerp(wind.sz, strike.sz, s);
+            rightElbowX = THREE.MathUtils.lerp(wind.ex, strike.ex, s);
+
+            swordMountX = THREE.MathUtils.lerp(wind.mx, strike.mx, s);
+            swordMountY = THREE.MathUtils.lerp(wind.my, strike.my, s);
+            swordMountZ = THREE.MathUtils.lerp(wind.mz, strike.mz, s);
+        } else {
+            const r = easeInOutCubic((p - strikeEnd) / (1 - strikeEnd));
+
+            rightShoulderX = THREE.MathUtils.lerp(strike.sx, baseRight.shoulderX, r);
+            rightShoulderY = THREE.MathUtils.lerp(strike.sy, baseRight.shoulderY, r);
+            rightShoulderZ = THREE.MathUtils.lerp(strike.sz, baseRight.shoulderZ, r);
+            rightElbowX = THREE.MathUtils.lerp(strike.ex, baseRight.elbowX, r);
+
+            swordMountX = THREE.MathUtils.lerp(strike.mx, baseSwordMount.x, r);
+            swordMountY = THREE.MathUtils.lerp(strike.my, baseSwordMount.y, r);
+            swordMountZ = THREE.MathUtils.lerp(strike.mz, baseSwordMount.z, r);
+        }
+
+        // Keep shield readable during attack (out of the way, still held)
+        leftShoulderX = THREE.MathUtils.lerp(leftShoulderX, baseLeft.shoulderX, 0.6);
+        leftShoulderY = THREE.MathUtils.lerp(leftShoulderY, baseLeft.shoulderY, 0.6);
+        leftShoulderZ = THREE.MathUtils.lerp(leftShoulderZ, baseLeft.shoulderZ, 0.6);
+        leftElbowX = THREE.MathUtils.lerp(leftElbowX, baseLeft.elbowX, 0.6);
     }
 
     // Apply with smoothing so it feels physical
-    const lShoulder = player.userData.leftShoulder;
-    const lElbow = player.userData.leftElbow;
-    const rShoulder = player.userData.rightShoulder;
-    const rElbow = player.userData.rightElbow;
+    const lShoulder = ud.leftShoulder;
+    const lElbow = ud.leftElbow;
+    const rShoulder = ud.rightShoulder;
+    const rElbow = ud.rightElbow;
 
     lShoulder.rotation.x = damp(lShoulder.rotation.x, leftShoulderX, 20, dt);
     lShoulder.rotation.y = damp(lShoulder.rotation.y, leftShoulderY, 20, dt);
@@ -4505,16 +4635,49 @@ function animatePlayerRig(dt) {
     rShoulder.rotation.z = damp(rShoulder.rotation.z, rightShoulderZ, 20, dt);
     rElbow.rotation.x = damp(rElbow.rotation.x, rightElbowX, 24, dt);
 
-    // Weapon lag (small delay makes it feel heavier)
-    const swordMount = player.userData.swordMount;
-    swordMount.rotation.x = damp(swordMount.rotation.x, swordMountX, 16, dt);
-    swordMount.rotation.y = damp(swordMount.rotation.y, swordMountY, 16, dt);
-    swordMount.rotation.z = damp(swordMount.rotation.z, swordMountZ, 14, dt);
+    // Mount positions (small smoothing)
+    const swordMount = ud.swordMount;
+    swordMount.position.x = damp(swordMount.position.x, swordPosX, 22, dt);
+    swordMount.position.y = damp(swordMount.position.y, swordPosY, 22, dt);
+    swordMount.position.z = damp(swordMount.position.z, swordPosZ, 22, dt);
 
-    const shieldMount = player.userData.shieldMount;
-    shieldMount.rotation.x = damp(shieldMount.rotation.x, shieldMountX, 16, dt);
-    shieldMount.rotation.y = damp(shieldMount.rotation.y, shieldMountY, 16, dt);
-    shieldMount.rotation.z = damp(shieldMount.rotation.z, shieldMountZ, 16, dt);
+    const shieldMount = ud.shieldMount;
+    shieldMount.position.x = damp(shieldMount.position.x, shieldPosX, 22, dt);
+    shieldMount.position.y = damp(shieldMount.position.y, shieldPosY, 22, dt);
+    shieldMount.position.z = damp(shieldMount.position.z, shieldPosZ, 22, dt);
+
+    // Mount rotations: use quaternions to avoid gimbal "flailing" and keep them weighty
+    // Sword
+    S.e1.set(swordMountX, swordMountY, swordMountZ, 'XYZ');
+    S.q1.setFromEuler(S.e1);
+    dampQuaternion(swordMount.quaternion, S.q1, 14, dt);
+
+    // Shield
+    if (playerStats.isBlocking) {
+        // Keep the shield facing forward and upright while blocking:
+        // qMount = inverse(qHand) * qDesired
+        S.e1.set(lShoulder.rotation.x, lShoulder.rotation.y, lShoulder.rotation.z, 'XYZ');
+        S.q1.setFromEuler(S.e1);
+
+        S.e2.set(lElbow.rotation.x, 0, 0, 'XYZ');
+        S.q2.setFromEuler(S.e2);
+
+        S.q1.multiply(S.q2); // qHand (in model space)
+
+        S.q3.copy(S.q1).invert();
+
+        // Desired block orientation in model space (mostly forward, no "tilt up")
+        S.e2.set(0, 0, 0, 'XYZ');
+        S.q2.setFromEuler(S.e2);
+
+        S.q3.multiply(S.q2);
+
+        dampQuaternion(shieldMount.quaternion, S.q3, 22, dt);
+    } else {
+        S.e1.set(shieldMountX, shieldMountY, shieldMountZ, 'XYZ');
+        S.q1.setFromEuler(S.e1);
+        dampQuaternion(shieldMount.quaternion, S.q1, 16, dt);
+    }
 }
 
 
@@ -5973,6 +6136,9 @@ function playerAttack() {
     playerStats.isAttackingNow = true;
     playerStats.attackAnimTime = 0;
 
+    // Cycle through a small set of slash directions so attacks do not look identical
+    playerStats.attackSwingIndex = (playerStats.attackSwingIndex + 1) % 3;
+
     // Play sword swing sound
     if (audioManager) {
         audioManager.play('swordSwing', 0.6);
@@ -6425,8 +6591,8 @@ function updateHUD() {
         showLowHealthVignette(false);
     }
 
-    document.getElementById('speed-mult').textContent = `⚡ Speed: x${playerStats.speedMult.toFixed(1)}`;
-    document.getElementById('power-mult').textContent = `💪 Power: x${playerStats.powerMult.toFixed(1)}`;
+    document.getElementById('speed-mult').textContent = `� Speed: x${playerStats.speedMult.toFixed(1)}`;
+    document.getElementById('power-mult').textContent = `=� Power: x${playerStats.powerMult.toFixed(1)}`;
 }
 
 // Low health vignette effect
