@@ -74,6 +74,15 @@ function dampAngle(current, target, lambda, dt) {
     return current + deltaAngle(current, target) * (1 - Math.exp(-lambda * dt));
 }
 
+function dampQuaternion(quat, targetQuat, lambda, dt) {
+    const t = 1 - Math.exp(-lambda * dt);
+    quat.slerp(targetQuat, t);
+}
+
+// Temp quaternions (avoid per-frame allocations)
+const SHIELD_Q1 = new THREE.Quaternion();
+const SHIELD_Q2 = new THREE.Quaternion();
+
 function easeInOutCubic(x) {
     return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 }
@@ -2076,9 +2085,8 @@ function createPlayer() {
     leftHand.add(leftHandMesh);
 
     const shieldMount = new THREE.Group();
-    // Restored posefix values - shield sits on forearm naturally
-    shieldMount.position.set(-0.45, 0.02, 0.18);
-    shieldMount.rotation.set(0.15, -1.15, 0.10);
+    shieldMount.position.set(-0.12, -0.05, 0.55);
+    shieldMount.rotation.set(0.05, -0.25, 0.0);
     leftHand.add(shieldMount);
 
     // SHIELD
@@ -2136,9 +2144,8 @@ function createPlayer() {
     rightHand.add(rightHandMesh);
 
     const swordMount = new THREE.Group();
-    // Upright sword position - held naturally in fist pointing up
-    swordMount.position.set(0.10, -0.05, 0.08);
-    swordMount.rotation.set(0.0, 0.0, 0.0);
+    swordMount.position.set(0.12, -0.08, 0.35);
+    swordMount.rotation.set(0.25, 0.15, 0.35);
     rightHand.add(swordMount);
 
     function createKatanaBladeGeometry(length, baseWidth, tipWidth, thickness, curve, segments) {
@@ -2447,10 +2454,8 @@ function createPlayer() {
     playerGroup.userData.pose = {
         left: { shoulderX: -0.35, shoulderY: 0.15, shoulderZ: 0.55, elbowX: -1.05 },
         right: { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 },
-        // Sword upright in fist
-        swordMount: { x: 0.0, y: 0.0, z: 0.0 },
-        // Shield restored to posefix values
-        shieldMount: { x: 0.15, y: -1.15, z: 0.10 }
+        swordMount: { x: 0.25, y: 0.15, z: 0.35 },
+        shieldMount: { x: 0.05, y: -0.25, z: 0.0 }
     };
 
     
@@ -4421,7 +4426,7 @@ function animatePlayerRig(dt) {
     // Base arm swing (reduced because we have a shield and sword)
     const baseLeft = (player.userData.pose && player.userData.pose.left) ? player.userData.pose.left : { shoulderX: -0.35, shoulderY: 0.15, shoulderZ: 0.55, elbowX: -1.05 };
     const baseRight = (player.userData.pose && player.userData.pose.right) ? player.userData.pose.right : { shoulderX: -0.15, shoulderY: -0.10, shoulderZ: -0.40, elbowX: -0.75 };
-    const baseSwordMount = (player.userData.pose && player.userData.pose.swordMount) ? player.userData.pose.swordMount : { x: -0.10, y: 0.15, z: 0.35 };
+    const baseSwordMount = (player.userData.pose && player.userData.pose.swordMount) ? player.userData.pose.swordMount : { x: 0.25, y: 0.15, z: 0.35 };
     const baseShieldMount = (player.userData.pose && player.userData.pose.shieldMount) ? player.userData.pose.shieldMount : { x: 0.05, y: -0.25, z: 0.0 };
 
     let leftShoulderX = baseLeft.shoulderX + walkSin * 0.20 * moveAmt;
@@ -4554,6 +4559,14 @@ function animatePlayerRig(dt) {
         swordMountZ = THREE.MathUtils.lerp(baseSwordMount.z, holdPose.mz, w);
     }
 
+
+    // Optional polish: subtle sword wobble while moving (keeps the tip generally up)
+    if (!playerStats.isAttackingNow && !playerStats.isBlocking && moveAmt > 0.01) {
+        const wob = moveAmt;
+        swordMountX += (walkSin * 0.015 + walkSin2 * 0.010) * wob;
+        swordMountY += (walkCos * 0.010) * wob;
+    }
+
     // Apply with smoothing so it feels physical
     const lShoulder = player.userData.leftShoulder;
     const lElbow = player.userData.leftElbow;
@@ -4579,9 +4592,18 @@ function animatePlayerRig(dt) {
     swordMount.rotation.z = damp(swordMount.rotation.z, swordMountZ, swordFollowZ, dt);
 
     const shieldMount = player.userData.shieldMount;
-    shieldMount.rotation.x = damp(shieldMount.rotation.x, shieldMountX, 16, dt);
-    shieldMount.rotation.y = damp(shieldMount.rotation.y, shieldMountY, 16, dt);
-    shieldMount.rotation.z = damp(shieldMount.rotation.z, shieldMountZ, 16, dt);
+
+    if (playerStats.isBlocking) {
+        // Keep the shield upright and facing forward while blocking.
+        // qMount = inverse(qHand) * qDesired (qDesired is identity)
+        SHIELD_Q1.copy(lShoulder.quaternion).multiply(lElbow.quaternion);
+        SHIELD_Q2.copy(SHIELD_Q1).invert();
+        dampQuaternion(shieldMount.quaternion, SHIELD_Q2, 22, dt);
+    } else {
+        shieldMount.rotation.x = damp(shieldMount.rotation.x, shieldMountX, 16, dt);
+        shieldMount.rotation.y = damp(shieldMount.rotation.y, shieldMountY, 16, dt);
+        shieldMount.rotation.z = damp(shieldMount.rotation.z, shieldMountZ, 16, dt);
+    }
 }
 
 
@@ -6508,8 +6530,8 @@ function updateHUD() {
         showLowHealthVignette(false);
     }
 
-    document.getElementById('speed-mult').textContent = `⚡ Speed: x${playerStats.speedMult.toFixed(1)}`;
-    document.getElementById('power-mult').textContent = `💪 Power: x${playerStats.powerMult.toFixed(1)}`;
+    document.getElementById('speed-mult').textContent = `� Speed: x${playerStats.speedMult.toFixed(1)}`;
+    document.getElementById('power-mult').textContent = `=� Power: x${playerStats.powerMult.toFixed(1)}`;
 }
 
 // Low health vignette effect
